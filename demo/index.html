@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⬡ Agent Office — Claude Code Visualizer</title>
+<meta name="description" content="Watch Claude Code's AI agents work in real time. Agents spawn, acquire skills, pass work to each other, and complete tasks — visualized as a living office.">
+<meta property="og:title" content="Agent Office — Claude Code Visualizer">
+<meta property="og:description" content="Real-time visualization of Claude Code agents working as an animated office.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#05050a; --surface:#0c0c14; --card:#10101a; --border:#1a1a2e;
+    --accent:#818cf8; --pink:#ec4899; --green:#34d399; --yellow:#f59e0b;
+    --blue:#60a5fa; --text:#e2e8f0; --muted:#4b5563; --dim:#94a3b8;
+  }
+  body { font-family:'JetBrains Mono',monospace; background:var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column; }
+  ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:var(--surface)} ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes spawn{from{opacity:0;transform:scale(.7) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}
+  @keyframes fadeSlide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes glow{0%,100%{box-shadow:0 0 6px rgba(129,140,248,.15)}50%{box-shadow:0 0 22px rgba(129,140,248,.45)}}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  @keyframes complete{0%{transform:scale(1)}40%{transform:scale(1.05)}100%{transform:scale(1)}}
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  @keyframes packetFloat{
+    0%{opacity:0;transform:scale(.5) translate(0,0)}
+    20%{opacity:1;transform:scale(1) translate(0,0)}
+    80%{opacity:.8}
+    100%{opacity:0;transform:scale(.4) translate(var(--dx),var(--dy))}
+  }
+  @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+  /* Hero banner */
+  #hero {
+    background: linear-gradient(180deg, #08080f 0%, var(--bg) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 24px 16px;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  }
+  .hero-left { display:flex; align-items:center; gap:14px; }
+  .hero-icon {
+    width:44px; height:44px; border-radius:12px;
+    background: linear-gradient(135deg, var(--accent), var(--pink));
+    display:flex; align-items:center; justify-content:center; font-size:22px;
+    box-shadow: 0 0 24px rgba(129,140,248,.4);
+  }
+  .hero-title { font-size:16px; font-weight:700; color:#c7d2fe; letter-spacing:.06em; }
+  .hero-sub { font-size:10px; color:var(--muted); letter-spacing:.15em; margin-top:2px; }
+  .hero-right { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .pill {
+    padding:6px 14px; border-radius:20px; font-size:10px; letter-spacing:.1em;
+    border:1px solid; cursor:pointer; transition:all .2s; text-decoration:none; display:inline-flex; align-items:center; gap:6px;
+  }
+  .pill-demo { border-color:rgba(129,140,248,.4); color:var(--accent); background:rgba(129,140,248,.08); }
+  .pill-demo:hover { background:rgba(129,140,248,.2); }
+  .pill-gh { border-color:var(--border); color:var(--dim); background:rgba(255,255,255,.03); }
+  .pill-gh:hover { border-color:rgba(255,255,255,.2); color:var(--text); }
+  .demo-badge {
+    font-size:9px; padding:2px 7px; border-radius:3px;
+    background:rgba(236,72,153,.15); border:1px solid rgba(236,72,153,.3); color:var(--pink);
+    letter-spacing:.1em; animation:pulse 2s ease-in-out infinite;
+  }
+
+  /* Stats bar */
+  #statsbar {
+    padding:8px 20px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--surface);
+  }
+  .stats { display:flex; gap:20px; }
+  .stat { text-align:center; }
+  .stat-val { font-size:17px; font-weight:700; line-height:1; transition:all .3s; }
+  .stat-lbl { font-size:8px; color:var(--muted); letter-spacing:.15em; margin-top:2px; }
+  .live-pill { display:flex; align-items:center; gap:5px; font-size:9px; color:var(--green); letter-spacing:.15em; }
+  .live-dot { width:7px; height:7px; border-radius:50%; background:var(--green); animation:pulse 1.5s ease-in-out infinite; }
+
+  /* Layout */
+  #layout { display:flex; flex:1; overflow:hidden; height:calc(100vh - 117px); }
+
+  /* Floor */
+  #floor { flex:1; padding:14px; overflow-y:auto; position:relative; }
+  .grid-bg {
+    position:absolute; inset:0; pointer-events:none;
+    background-image:linear-gradient(rgba(129,140,248,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(129,140,248,.025) 1px,transparent 1px);
+    background-size:40px 40px;
+  }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(228px,1fr)); gap:11px; position:relative; z-index:1; }
+
+  /* Agent card */
+  .agent-card {
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:13px; position:relative; overflow:hidden;
+    animation:spawn .45s cubic-bezier(.34,1.56,.64,1) forwards;
+    transition:border-color .3s;
+  }
+  .agent-card.working { animation:glow 2.5s ease-in-out infinite; border-color:rgba(129,140,248,.28); }
+  .agent-card.completing { animation:complete .5s ease; }
+
+  .a-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .a-id { display:flex; align-items:center; gap:8px; }
+  .a-avatar {
+    width:32px; height:32px; border-radius:8px;
+    background:linear-gradient(135deg,rgba(129,140,248,.15),rgba(236,72,153,.1));
+    border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center; font-size:15px;
+  }
+  .a-name { font-size:10px; font-weight:700; color:#c7d2fe; }
+  .a-role { font-size:8px; color:var(--muted); letter-spacing:.1em; }
+  .a-led { width:8px; height:8px; border-radius:50%; transition:all .3s; }
+  .a-led.working  { background:var(--yellow); box-shadow:0 0 8px var(--yellow); animation:pulse 1.2s ease-in-out infinite; }
+  .a-led.passing  { background:var(--blue);   box-shadow:0 0 8px var(--blue); }
+  .a-led.spawning { background:var(--pink);   box-shadow:0 0 8px var(--pink); animation:pulse .8s ease-in-out infinite; }
+  .a-led.completed{ background:var(--green);  box-shadow:0 0 8px var(--green); }
+  .a-led.idle     { background:#2d3748; }
+
+  .a-task { font-size:10px; color:var(--dim); line-height:1.5; min-height:26px; margin-bottom:8px; display:flex; align-items:center; gap:4px; }
+  .a-arrow { color:var(--accent); font-size:9px; flex-shrink:0; }
+  .cursor-b { display:inline-block; width:5px; height:11px; background:var(--accent); animation:blink 1s step-end infinite; vertical-align:middle; margin-left:2px; }
+
+  .a-track { height:2px; background:var(--border); border-radius:2px; margin-bottom:10px; overflow:hidden; }
+  .a-bar { height:100%; border-radius:2px; transition:width .7s ease; }
+  .a-bar.working  { background:linear-gradient(90deg,var(--accent),var(--pink)); box-shadow:0 0 6px rgba(129,140,248,.6); }
+  .a-bar.passing  { background:linear-gradient(90deg,var(--blue),var(--accent)); }
+  .a-bar.completed{ background:linear-gradient(90deg,var(--green),#059669); }
+
+  .a-skills { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:9px; min-height:20px; }
+  .skill {
+    font-size:8px; padding:2px 6px; border-radius:4px;
+    background:rgba(129,140,248,.1); border:1px solid rgba(129,140,248,.2); color:#a5b4fc;
+    animation:fadeSlide .3s ease;
+  }
+  .skill.new { border-color:rgba(52,211,153,.5); color:var(--green); background:rgba(52,211,153,.08); }
+
+  .a-footer { display:flex; justify-content:space-between; border-top:1px solid var(--border); padding-top:8px; font-size:8px; color:var(--muted); }
+
+  /* Packet */
+  .packet {
+    position:fixed; width:10px; height:10px; border-radius:50%; pointer-events:none; z-index:500;
+    animation:packetFloat 1.2s cubic-bezier(.4,0,.2,1) forwards;
+  }
+
+  /* Sidebar */
+  #sidebar { width:268px; border-left:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
+  .panel-hdr { padding:9px 12px; border-bottom:1px solid var(--border); font-size:8px; letter-spacing:.18em; color:var(--muted); background:rgba(129,140,248,.03); flex-shrink:0; }
+  #log { flex:1; overflow-y:auto; padding:8px; }
+  .log-e { display:flex; gap:7px; padding:5px 7px; margin-bottom:3px; border-radius:5px; background:rgba(255,255,255,.02); animation:fadeSlide .3s ease; }
+  .log-i { font-size:10px; flex-shrink:0; }
+  .log-t { font-size:9px; color:#cbd5e1; line-height:1.4; }
+  .log-ts { font-size:8px; color:var(--muted); margin-top:2px; }
+
+  #tools-panel { border-top:1px solid var(--border); flex-shrink:0; }
+  #tools-list { padding:8px; max-height:130px; overflow-y:auto; }
+  .t-row { display:flex; align-items:center; gap:6px; padding:3px 0; }
+  .t-name { font-size:9px; color:var(--dim); min-width:70px; }
+  .t-track { flex:1; height:3px; background:var(--border); border-radius:2px; overflow:hidden; }
+  .t-bar { height:100%; background:var(--accent); border-radius:2px; transition:width .5s; }
+  .t-count { font-size:8px; color:var(--muted); min-width:18px; text-align:right; }
+
+  /* Install CTA */
+  #cta {
+    border-top:1px solid var(--border); padding:14px 16px;
+    background:linear-gradient(135deg,rgba(129,140,248,.05),rgba(236,72,153,.05));
+    flex-shrink:0;
+  }
+  .cta-title { font-size:10px; font-weight:600; color:var(--accent); margin-bottom:6px; }
+  .cta-code {
+    background:rgba(0,0,0,.4); border:1px solid var(--border); border-radius:6px;
+    padding:8px 10px; font-size:9px; color:var(--green); letter-spacing:.05em;
+    margin-bottom:4px; word-break:break-all;
+  }
+  .cta-sub { font-size:8px; color:var(--muted); }
+
+  /* Scanline */
+  .scanline { position:fixed; inset:0; pointer-events:none; z-index:99; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.025) 2px,rgba(0,0,0,.025) 4px); }
+
+  /* Empty */
+  #empty { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; pointer-events:none; }
+  .empty-icon { font-size:52px; opacity:.1; animation:float 3s ease-in-out infinite; }
+  .empty-t { font-size:12px; color:var(--muted); letter-spacing:.1em; }
+  .empty-s { font-size:9px; color:#2d3748; text-align:center; line-height:1.9; }
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+
+<!-- Hero -->
+<div id="hero">
+  <div class="hero-left">
+    <div class="hero-icon">⬡</div>
+    <div>
+      <div class="hero-title">AGENT OFFICE</div>
+      <div class="hero-sub">CLAUDE CODE VISUALIZER</div>
+    </div>
+  </div>
+  <div class="hero-right">
+    <span class="demo-badge">LIVE DEMO</span>
+    <a class="pill pill-gh" id="gh-link" href="#" target="_blank">⭐ GitHub</a>
+    <a class="pill pill-demo" href="#install">↓ Install</a>
+  </div>
+</div>
+
+<!-- Stats bar -->
+<div id="statsbar">
+  <div class="stats">
+    <div class="stat"><div class="stat-val" id="s-agents" style="color:var(--accent)">0</div><div class="stat-lbl">AGENTS</div></div>
+    <div class="stat"><div class="stat-val" id="s-working" style="color:var(--yellow)">0</div><div class="stat-lbl">WORKING</div></div>
+    <div class="stat"><div class="stat-val" id="s-tools" style="color:var(--blue)">0</div><div class="stat-lbl">TOOL CALLS</div></div>
+    <div class="stat"><div class="stat-val" id="s-done" style="color:var(--green)">0</div><div class="stat-lbl">COMPLETED</div></div>
+  </div>
+  <div class="live-pill"><div class="live-dot"></div>SIMULATION RUNNING</div>
+</div>
+
+<!-- Layout -->
+<div id="layout">
+  <div id="floor">
+    <div class="grid-bg"></div>
+    <div id="grid"></div>
+    <div id="empty">
+      <div class="empty-icon">⬡</div>
+      <div class="empty-t">SPAWNING AGENTS...</div>
+      <div class="empty-s">This demo simulates Claude Code agents.<br>Install the real plugin to see your actual work.</div>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div class="panel-hdr">ACTIVITY LOG</div>
+    <div id="log"></div>
+
+    <div id="tools-panel">
+      <div class="panel-hdr">TOOL USAGE</div>
+      <div id="tools-list"></div>
+    </div>
+
+    <div id="cta" id="install">
+      <div class="cta-title">↓ Install in your project</div>
+      <div class="cta-code">./install.sh /your/project</div>
+      <div class="cta-code">cd server && node index.js</div>
+      <div class="cta-sub">Then run Claude Code — agents appear live.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Simulation engine ─────────────────────────────────────
+const ROLES = ['Planner','Researcher','Coder','Reviewer','Tester','Debugger','Writer','Architect'];
+const EMOJI = {Planner:'🗂️',Researcher:'🔍',Coder:'⌨️',Reviewer:'👁️',Tester:'🧪',Debugger:'🐛',Writer:'✍️',Architect:'🏗️',Orchestrator:'🗂️'};
+const TASKS = [
+  'Analyzing codebase','Writing unit tests','Refactoring module',
+  'Reviewing changes','Debugging error logs','Updating docs',
+  'Implementing feature','Running test suite','Optimizing query',
+  'Planning sprint','Researching APIs','Fixing edge case',
+  'Scaffolding schema','Validating output','Generating types',
+];
+const TOOLS = ['Read','Write','Bash','Grep','Glob','Edit','Task','WebSearch'];
+const TOOL_SKILL = {Read:'File Reading',Write:'File Writing',Bash:'Shell Commands',Grep:'Code Search',Glob:'Pattern Match',Edit:'Code Editing',Task:'Task Delegation',WebSearch:'Web Research'};
+const PASS_MSGS = ['analysis results','test suite','refactored code','review notes','bug report','api spec','schema draft'];
+const LOG_COLOR = {spawn:'#ec4899',pass:'#60a5fa',complete:'#34d399',skill:'#818cf8',tool:'#f59e0b',retire:'#6b7280'};
+const LOG_ICON  = {spawn:'⚡',pass:'→',complete:'✓',skill:'★',tool:'▶',retire:'◻'};
+
+let uid = 0;
+const rand = a => a[Math.floor(Math.random()*a.length)];
+const randInt = (a,b) => Math.floor(Math.random()*(b-a))+a;
+
+let agents = {};
+let logEntries = [];
+let toolCounts = {};
+let totalCompleted = 0;
+let totalToolCalls = 0;
+
+function makeAgent(role) {
+  const r = role || rand(ROLES);
+  const id = ++uid;
+  return {
+    id: String(id), role: r,
+    name: `${r.slice(0,3).toUpperCase()}-${String(id).padStart(3,'0')}`,
+    status:'spawning', task: rand(TASKS),
+    skills:[], progress: randInt(5,25), toolCalls:0,
+  };
+}
+
+function addLog(type, text) {
+  logEntries.unshift({type, text, ts: Date.now()});
+  if (logEntries.length > 60) logEntries.pop();
+}
+
+// Boot with 3 agents
+setTimeout(() => {
+  ['Planner','Researcher','Coder'].forEach((r,i) => {
+    setTimeout(() => {
+      const a = makeAgent(r);
+      a.status = 'working'; a.progress = randInt(20,60);
+      agents[a.id] = a;
+      addLog('spawn', `${a.name} joined as ${a.role}`);
+      render();
+    }, i * 700);
+  });
+}, 400);
+
+// Main tick: progress
+setInterval(() => {
+  Object.values(agents).forEach(a => {
+    if (a.status === 'spawning') { a.status = 'working'; return; }
+    if (a.status === 'working') a.progress = Math.min(100, a.progress + randInt(2,9));
+    if (a.status === 'passing') a.status = 'working';
+  });
+  renderAgents();
+  updateStats();
+}, 600);
+
+// Completions
+setInterval(() => {
+  const completing = Object.values(agents).find(a => a.status === 'working' && a.progress >= 100);
+  if (!completing) return;
+  completing.status = 'completing';
+  totalCompleted++;
+  addLog('complete', `${completing.name} completed: ${completing.task}`);
+  if (Math.random() > 0.4) {
+    const newSkill = Object.values(TOOL_SKILL).find(s => !completing.skills.includes(s));
+    if (newSkill) { completing.skills = [...completing.skills, newSkill].slice(0,5); addLog('skill',`${completing.name} acquired: ${newSkill}`); }
+  }
+  render();
+  setTimeout(() => {
+    completing.status = 'idle'; completing.progress = 0; completing.task = rand(TASKS);
+    setTimeout(() => { completing.status = 'working'; render(); }, 800);
+  }, 1200);
+}, 1800);
+
+// Tool use simulation
+setInterval(() => {
+  const workers = Object.values(agents).filter(a => a.status === 'working');
+  if (!workers.length) return;
+  const a = rand(workers);
+  const tool = rand(TOOLS);
+  const skill = TOOL_SKILL[tool];
+  a.toolCalls++;
+  totalToolCalls++;
+  toolCounts[tool] = (toolCounts[tool]||0) + 1;
+  if (skill && !a.skills.includes(skill)) a.skills = [...a.skills, skill].slice(0,5);
+  a.task = `${tool}: ${rand(TASKS).toLowerCase()}`;
+  addLog('tool', `${a.name} → ${tool}`);
+  render();
+}, 2200);
+
+// Passing work
+setInterval(() => {
+  const workers = Object.values(agents).filter(a => a.status === 'working');
+  if (workers.length < 2) return;
+  const from = rand(workers);
+  const to = rand(workers.filter(a => a.id !== from.id));
+  if (!to) return;
+  from.status = 'passing';
+  addLog('pass', `${from.name} → ${to.name}: ${rand(PASS_MSGS)}`);
+  spawnPacket();
+  render();
+}, 4500);
+
+// New agents
+setInterval(() => {
+  if (Object.keys(agents).length >= 9) return;
+  const a = makeAgent();
+  agents[a.id] = a;
+  addLog('spawn', `${a.name} hired as ${a.role}`);
+  render();
+}, 8000);
+
+// Retire
+setInterval(() => {
+  const all = Object.values(agents);
+  if (all.length <= 4) return;
+  const idle = all.filter(a => a.status === 'idle');
+  if (!idle.length || Math.random() > 0.4) return;
+  const a = rand(idle);
+  addLog('retire', `${a.name} standing by`);
+  delete agents[a.id];
+  render();
+}, 14000);
+
+// ── Packets ───────────────────────────────────────────────
+function spawnPacket() {
+  const p = document.createElement('div');
+  p.className = 'packet';
+  const colors = ['#60a5fa','#818cf8','#34d399','#f59e0b'];
+  const color = rand(colors);
+  const dx = randInt(-250,250), dy = randInt(-180,180);
+  p.style.cssText = `background:${color};box-shadow:0 0 10px ${color};left:${randInt(20,70)}%;top:${randInt(30,70)}%;--dx:${dx}px;--dy:${dy}px`;
+  document.body.appendChild(p);
+  setTimeout(() => p.remove(), 1300);
+}
+
+// ── Render ────────────────────────────────────────────────
+function render() { updateStats(); renderAgents(); renderLog(); renderTools(); }
+
+function updateStats() {
+  const all = Object.values(agents);
+  document.getElementById('s-agents').textContent = all.length;
+  document.getElementById('s-working').textContent = all.filter(a=>a.status==='working'||a.status==='passing').length;
+  document.getElementById('s-tools').textContent = totalToolCalls;
+  document.getElementById('s-done').textContent = totalCompleted;
+}
+
+function renderAgents() {
+  const grid = document.getElementById('grid');
+  const empty = document.getElementById('empty');
+  const all = Object.values(agents);
+  empty.style.display = all.length ? 'none' : 'flex';
+
+  const existing = new Map([...grid.querySelectorAll('.agent-card')].map(el=>[el.dataset.id,el]));
+  const current = new Set(all.map(a=>a.id));
+
+  existing.forEach((el,id) => { if(!current.has(id)) el.remove(); });
+
+  all.forEach(a => {
+    let card = grid.querySelector(`[data-id="${a.id}"]`);
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'agent-card';
+      card.dataset.id = a.id;
+      grid.appendChild(card);
+    }
+    card.className = `agent-card ${a.status}`;
+    const em = EMOJI[a.role] || '🤖';
+    const isActive = a.status==='working'||a.status==='passing';
+    const ledC = {working:'#f59e0b',passing:'#60a5fa',spawning:'#ec4899',completed:'#34d399',idle:'#2d3748'}[a.status]||'#2d3748';
+    const barC = a.status==='completed'?'completed':a.status==='passing'?'passing':'working';
+    card.innerHTML = `
+      <div class="a-header">
+        <div class="a-id">
+          <div class="a-avatar">${em}</div>
+          <div><div class="a-name">${a.name}</div><div class="a-role">${a.role.toUpperCase()}</div></div>
+        </div>
+        <div class="a-led ${a.status}" style="background:${ledC};box-shadow:${isActive?`0 0 8px ${ledC}`:'none'}"></div>
+      </div>
+      <div class="a-task">
+        ${isActive?'<span class="a-arrow">▶</span>':''}
+        <span>${esc(a.task)}</span>
+        ${isActive?'<span class="cursor-b"></span>':''}
+      </div>
+      <div class="a-track"><div class="a-bar ${barC}" style="width:${a.progress}%"></div></div>
+      <div class="a-skills">${(a.skills||[]).map((s,i)=>`<span class="skill${i===a.skills.length-1&&isActive?' new':''}">${s}</span>`).join('')}</div>
+      <div class="a-footer"><span>${a.status.toUpperCase()}</span><span>${a.toolCalls} calls</span></div>
+    `;
+  });
+}
+
+function renderLog() {
+  document.getElementById('log').innerHTML = logEntries.map(e=>`
+    <div class="log-e" style="border-left:2px solid ${LOG_COLOR[e.type]||'#374151'}">
+      <div class="log-i" style="color:${LOG_COLOR[e.type]||'#6b7280'}">${LOG_ICON[e.type]||'·'}</div>
+      <div><div class="log-t">${esc(e.text)}</div><div class="log-ts">${ago(e.ts)}</div></div>
+    </div>`).join('');
+}
+
+function renderTools() {
+  const entries = Object.entries(toolCounts).sort((a,b)=>b[1]-a[1]);
+  const max = entries[0]?.[1]||1;
+  document.getElementById('tools-list').innerHTML = entries.map(([t,c])=>`
+    <div class="t-row">
+      <div class="t-name">${t}</div>
+      <div class="t-track"><div class="t-bar" style="width:${Math.round(c/max*100)}%"></div></div>
+      <div class="t-count">${c}</div>
+    </div>`).join('') || `<div style="font-size:9px;color:var(--muted);padding:6px 4px">No tools yet</div>`;
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function ago(ts) { const s=Math.floor((Date.now()-ts)/1000); return s<60?`${s}s ago`:`${Math.floor(s/60)}m ago`; }
+setInterval(renderLog, 10000);
+</script>
+</body>
+</html>

@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⬡ Agent Office — Claude Code</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #05050a;
+    --surface: #0c0c14;
+    --card: #10101a;
+    --border: #1a1a2e;
+    --accent: #818cf8;
+    --pink: #ec4899;
+    --green: #34d399;
+    --yellow: #f59e0b;
+    --blue: #60a5fa;
+    --text: #e2e8f0;
+    --muted: #4b5563;
+    --dim: #94a3b8;
+  }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── Animations ── */
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  @keyframes spawn { from{opacity:0;transform:scale(.7) translateY(12px)} to{opacity:1;transform:scale(1) translateY(0)} }
+  @keyframes fadeSlide { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes glow { 0%,100%{box-shadow:0 0 6px rgba(129,140,248,.15)} 50%{box-shadow:0 0 22px rgba(129,140,248,.45)} }
+  @keyframes progress { from{width:0} }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  @keyframes ripple { from{transform:scale(.8);opacity:.9} to{transform:scale(2.5);opacity:0} }
+  @keyframes scanline { 0%{top:-5%} 100%{top:105%} }
+  @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+  @keyframes complete { 0%{transform:scale(1)} 40%{transform:scale(1.05)} 100%{transform:scale(1)} }
+  @keyframes packet {
+    0%   { opacity:0; transform:scale(.6); }
+    15%  { opacity:1; transform:scale(1); }
+    85%  { opacity:1; }
+    100% { opacity:0; transform:translate(var(--dx),var(--dy)) scale(.4); }
+  }
+
+  /* ── Header ── */
+  #header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #0d0d1a, var(--surface));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    z-index: 50;
+  }
+  .logo { display:flex; align-items:center; gap:10px; }
+  .logo-icon {
+    width:30px; height:30px;
+    background: linear-gradient(135deg, var(--accent), var(--pink));
+    border-radius: 8px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:15px;
+  }
+  .logo-title { font-size:12px; font-weight:700; letter-spacing:.1em; color:#c7d2fe; }
+  .logo-sub   { font-size:9px; color:var(--muted); letter-spacing:.2em; }
+
+  .header-stats { display:flex; gap:20px; }
+  .stat { text-align:center; }
+  .stat-val { font-size:18px; font-weight:700; line-height:1; }
+  .stat-lbl { font-size:8px; color:var(--muted); letter-spacing:.15em; margin-top:2px; }
+
+  .status-pill {
+    display:flex; align-items:center; gap:6px;
+    padding: 5px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    font-size: 9px; letter-spacing:.15em;
+  }
+  .status-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+
+  /* ── Layout ── */
+  #main { display:flex; flex:1; overflow:hidden; }
+
+  /* ── Office Floor ── */
+  #floor {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    position: relative;
+  }
+  .grid-bg {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(129,140,248,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(129,140,248,.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  #agents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── Agent Card ── */
+  .agent-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 13px;
+    position: relative;
+    overflow: hidden;
+    animation: spawn .45s cubic-bezier(.34,1.56,.64,1) forwards;
+    transition: border-color .3s;
+  }
+  .agent-card.working { animation: glow 2.5s ease-in-out infinite; border-color: rgba(129,140,248,.3); }
+  .agent-card.completing { animation: complete .5s ease; }
+  .agent-card.error { border-color: rgba(239,68,68,.3); }
+  .agent-card.passing { border-color: rgba(96,165,250,.3); }
+
+  .agent-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .agent-id { display:flex; align-items:center; gap:8px; }
+  .agent-avatar {
+    width:32px; height:32px; border-radius:8px;
+    background: linear-gradient(135deg, rgba(129,140,248,.15), rgba(236,72,153,.1));
+    border: 1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    font-size:15px; flex-shrink:0;
+  }
+  .agent-name { font-size:10px; font-weight:700; color:#c7d2fe; letter-spacing:.05em; }
+  .agent-role { font-size:8px; color:var(--muted); letter-spacing:.12em; }
+
+  .status-indicator {
+    display:flex; align-items:center; gap:4px;
+  }
+  .status-led {
+    width:8px; height:8px; border-radius:50%;
+    transition: background .3s, box-shadow .3s;
+  }
+  .status-led.working { background:var(--yellow); box-shadow:0 0 8px var(--yellow); animation:pulse 1.2s ease-in-out infinite; }
+  .status-led.passing  { background:var(--blue);   box-shadow:0 0 8px var(--blue); }
+  .status-led.spawning { background:var(--pink);   box-shadow:0 0 8px var(--pink); animation:pulse .8s ease-in-out infinite; }
+  .status-led.completed{ background:var(--green);  box-shadow:0 0 8px var(--green); }
+  .status-led.error    { background:#ef4444;        box-shadow:0 0 8px #ef4444; }
+  .status-led.idle     { background:#2d3748; }
+
+  .agent-task {
+    font-size:10px; color:var(--dim); line-height:1.5;
+    min-height:26px; margin-bottom:8px;
+    display:flex; align-items:center; gap:4px;
+  }
+  .task-arrow { color:var(--accent); font-size:9px; flex-shrink:0; }
+  .cursor-blink { display:inline-block; width:5px; height:11px; background:var(--accent); animation:blink 1s step-end infinite; vertical-align:middle; margin-left:2px; }
+
+  .progress-track { height:2px; background:var(--border); border-radius:2px; margin-bottom:10px; overflow:hidden; }
+  .progress-bar {
+    height:100%; border-radius:2px;
+    transition: width .6s ease, background .3s;
+  }
+  .progress-bar.working  { background:linear-gradient(90deg, var(--accent), var(--pink)); box-shadow:0 0 6px rgba(129,140,248,.6); }
+  .progress-bar.passing  { background:linear-gradient(90deg, var(--blue), var(--accent)); }
+  .progress-bar.completed{ background:linear-gradient(90deg, var(--green), #059669); }
+  .progress-bar.error    { background:#ef4444; }
+
+  .skills { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:9px; }
+  .skill-tag {
+    font-size:8px; padding:2px 6px; border-radius:4px;
+    background:rgba(129,140,248,.1); border:1px solid rgba(129,140,248,.2);
+    color:#a5b4fc; letter-spacing:.04em;
+    animation: fadeSlide .3s ease;
+  }
+  .skill-tag.new { border-color: rgba(52,211,153,.5); color:var(--green); background:rgba(52,211,153,.08); }
+
+  .agent-footer {
+    display:flex; justify-content:space-between;
+    border-top:1px solid var(--border); padding-top:8px;
+    font-size:8px; color:var(--muted);
+  }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    width: 270px;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .panel-header {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 8px; letter-spacing: .18em; color: var(--muted);
+    background: rgba(129,140,248,.03);
+    flex-shrink: 0;
+  }
+
+  /* Log */
+  #log-container { flex:1; overflow-y:auto; padding:8px; }
+  .log-entry {
+    display:flex; gap:7px; padding:5px 7px; margin-bottom:3px;
+    border-radius:5px; background:rgba(255,255,255,.02);
+    animation: fadeSlide .3s ease;
+  }
+  .log-icon { font-size:10px; flex-shrink:0; }
+  .log-text { font-size:9px; color:#cbd5e1; line-height:1.4; flex:1; word-break:break-word; }
+  .log-time { font-size:8px; color:var(--muted); margin-top:2px; }
+
+  /* Tool counts */
+  #tools-panel { border-top:1px solid var(--border); flex-shrink:0; }
+  #tools-list { padding:8px; max-height:120px; overflow-y:auto; }
+  .tool-row { display:flex; justify-content:space-between; align-items:center; padding:3px 0; }
+  .tool-name { font-size:9px; color:var(--dim); }
+  .tool-bar-wrap { flex:1; margin:0 8px; height:3px; background:var(--border); border-radius:2px; overflow:hidden; }
+  .tool-bar { height:100%; background:var(--accent); border-radius:2px; transition:width .5s; }
+  .tool-count { font-size:8px; color:var(--muted); min-width:20px; text-align:right; }
+
+  /* Empty state */
+  #empty-state {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:16px;
+    pointer-events:none;
+  }
+  .empty-icon { font-size:48px; opacity:.15; animation:float 3s ease-in-out infinite; }
+  .empty-title { font-size:13px; color:var(--muted); letter-spacing:.1em; }
+  .empty-sub { font-size:10px; color:#2d3748; text-align:center; line-height:1.8; }
+
+  /* Scanline overlay */
+  .scanline {
+    position:fixed; inset:0; pointer-events:none; z-index:99;
+    background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.025) 2px,rgba(0,0,0,.025) 4px);
+  }
+
+  /* Connection banner */
+  #conn-banner {
+    position:fixed; top:0; left:0; right:0; z-index:200;
+    padding:8px 16px; text-align:center; font-size:10px; letter-spacing:.1em;
+    transition:transform .3s;
+  }
+  #conn-banner.hidden { transform:translateY(-100%); }
+  #conn-banner.disconnected { background:rgba(239,68,68,.9); color:#fff; }
+  #conn-banner.connecting { background:rgba(245,158,11,.9); color:#000; }
+</style>
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<div id="conn-banner" class="connecting">Connecting to Agent Office server...</div>
+
+<!-- Header -->
+<div id="header">
+  <div class="logo">
+    <div class="logo-icon">⬡</div>
+    <div>
+      <div class="logo-title">CLAUDE CODE</div>
+      <div class="logo-sub">AGENT OFFICE — LIVE</div>
+    </div>
+  </div>
+
+  <div class="header-stats">
+    <div class="stat"><div class="stat-val" id="s-agents" style="color:#818cf8">0</div><div class="stat-lbl">AGENTS</div></div>
+    <div class="stat"><div class="stat-val" id="s-working" style="color:#f59e0b">0</div><div class="stat-lbl">WORKING</div></div>
+    <div class="stat"><div class="stat-val" id="s-tools" style="color:#60a5fa">0</div><div class="stat-lbl">TOOL CALLS</div></div>
+    <div class="stat"><div class="stat-val" id="s-done" style="color:#34d399">0</div><div class="stat-lbl">COMPLETED</div></div>
+  </div>
+
+  <div class="status-pill" id="status-pill">
+    <div class="status-dot" id="status-dot" style="background:#2d3748"></div>
+    <span id="status-text">OFFLINE</span>
+  </div>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <div id="floor">
+    <div class="grid-bg"></div>
+    <div id="agents-grid"></div>
+    <div id="empty-state">
+      <div class="empty-icon">⬡</div>
+      <div class="empty-title">WAITING FOR AGENTS</div>
+      <div class="empty-sub">Run Claude Code in your project.<br>Agents will appear here as they spawn.</div>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div class="panel-header">ACTIVITY LOG</div>
+    <div id="log-container"></div>
+
+    <div id="tools-panel">
+      <div class="panel-header">TOOL USAGE</div>
+      <div id="tools-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const WS_URL = `ws://${location.host}`;
+const ROLE_EMOJI = {
+  Orchestrator:'🗂️', Reader:'📖', Searcher:'🔍', Writer:'✍️',
+  Editor:'✏️', Executor:'💻', Researcher:'🌐', Planner:'📋',
+  Subagent:'🤖', Worker:'⚙️', Agent:'🤖',
+};
+const LOG_ICON = {
+  agent_spawned:'⚡', agent_completed:'✓', tool_started:'▶',
+  tool_done:'→', tool_error:'✗', prompt_submitted:'◈',
+  session_start:'▲', session_end:'■', session_stopped:'■', init:'◉',
+};
+const LOG_COLOR = {
+  agent_spawned:'#ec4899', agent_completed:'#34d399', tool_started:'#f59e0b',
+  tool_done:'#60a5fa', tool_error:'#ef4444', prompt_submitted:'#818cf8',
+  session_start:'#34d399', session_end:'#6b7280', init:'#818cf8',
+};
+
+let agents = {};      // id -> agent
+let toolCounts = {};
+let totalCompleted = 0;
+let totalToolCalls = 0;
+let logEntries = [];
+let ws;
+
+// ── WebSocket ──────────────────────────────────────────────
+function connect() {
+  setBanner('connecting', 'Connecting to Agent Office server...');
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    setBanner('hidden', '');
+    setStatus('online', '#34d399', 'LIVE');
+  };
+
+  ws.onmessage = (e) => {
+    try { handleMsg(JSON.parse(e.data)); }
+    catch(err) { console.error('Parse error:', err); }
+  };
+
+  ws.onclose = () => {
+    setStatus('offline', '#ef4444', 'DISCONNECTED');
+    setBanner('disconnected', 'Connection lost — retrying in 3s...');
+    setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => {};
+}
+
+function handleMsg(msg) {
+  switch(msg.type) {
+    case 'init':
+      agents = {};
+      (msg.agents || []).forEach(a => agents[a.id] = a);
+      toolCounts = msg.toolCounts || {};
+      totalCompleted = msg.totalCompleted || 0;
+      totalToolCalls = Object.values(toolCounts).reduce((s,v) => s+v, 0);
+      render();
+      break;
+
+    case 'agent_spawned':
+      agents[msg.agent.id] = msg.agent;
+      addLog(msg.type, msg.log);
+      render();
+      break;
+
+    case 'agent_completed':
+      if (agents[msg.agent.id]) agents[msg.agent.id] = msg.agent;
+      totalCompleted = msg.totalCompleted;
+      addLog(msg.type, msg.log);
+      render();
+      // Remove agent card after 3s
+      setTimeout(() => {
+        delete agents[msg.agent.id];
+        render();
+      }, 3000);
+      break;
+
+    case 'tool_started':
+      if (agents[msg.agent.id]) agents[msg.agent.id] = msg.agent;
+      else agents[msg.agent.id] = msg.agent;
+      toolCounts = msg.toolCounts || toolCounts;
+      totalToolCalls = Object.values(toolCounts).reduce((s,v) => s+v, 0);
+      addLog(msg.type, msg.log);
+      render();
+      break;
+
+    case 'tool_done':
+    case 'tool_error':
+      if (agents[msg.agent.id]) agents[msg.agent.id] = msg.agent;
+      addLog(msg.type, msg.log);
+      renderAgents();
+      break;
+
+    case 'prompt_submitted':
+      agents[msg.agent.id] = msg.agent;
+      addLog(msg.type, msg.log);
+      render();
+      break;
+
+    case 'session_start':
+    case 'session_end':
+    case 'session_stopped':
+      (msg.agents || [msg.agent]).filter(Boolean).forEach(a => {
+        if (agents[a.id]) agents[a.id] = a;
+      });
+      addLog(msg.type, msg.log || msg.type.replace('_',' '));
+      render();
+      break;
+  }
+}
+
+// ── Render ─────────────────────────────────────────────────
+function render() {
+  updateStats();
+  renderAgents();
+  renderTools();
+}
+
+function updateStats() {
+  const all = Object.values(agents);
+  const working = all.filter(a => a.status === 'working' || a.status === 'passing').length;
+  document.getElementById('s-agents').textContent = all.length;
+  document.getElementById('s-working').textContent = working;
+  document.getElementById('s-tools').textContent = totalToolCalls;
+  document.getElementById('s-done').textContent = totalCompleted;
+}
+
+function renderAgents() {
+  const grid = document.getElementById('agents-grid');
+  const empty = document.getElementById('empty-state');
+  const all = Object.values(agents);
+
+  empty.style.display = all.length === 0 ? 'flex' : 'none';
+
+  // Sync cards
+  const existing = new Set([...grid.querySelectorAll('.agent-card')].map(el => el.dataset.id));
+  const current = new Set(all.map(a => String(a.id)));
+
+  // Remove departed
+  existing.forEach(id => {
+    if (!current.has(id)) {
+      const el = grid.querySelector(`[data-id="${id}"]`);
+      if (el) el.remove();
+    }
+  });
+
+  // Add/update
+  all.forEach(agent => {
+    let card = grid.querySelector(`[data-id="${agent.id}"]`);
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'agent-card';
+      card.dataset.id = agent.id;
+      grid.appendChild(card);
+    }
+
+    // Update classes
+    card.className = `agent-card ${agent.status}`;
+
+    const emoji = ROLE_EMOJI[agent.role] || '🤖';
+    const isActive = agent.status === 'working' || agent.status === 'passing';
+    const statusColors = {
+      working:'#f59e0b', passing:'#60a5fa', spawning:'#ec4899',
+      completed:'#34d399', error:'#ef4444', idle:'#2d3748'
+    };
+    const ledColor = statusColors[agent.status] || '#2d3748';
+    const progress = agent.progress || 0;
+    const barClass = agent.status === 'completed' ? 'completed' : agent.status === 'error' ? 'error' : agent.status === 'passing' ? 'passing' : 'working';
+
+    card.innerHTML = `
+      <div class="agent-header">
+        <div class="agent-id">
+          <div class="agent-avatar">${emoji}</div>
+          <div>
+            <div class="agent-name">${agent.name}</div>
+            <div class="agent-role">${(agent.role||'AGENT').toUpperCase()}</div>
+          </div>
+        </div>
+        <div class="status-indicator">
+          <div class="status-led ${agent.status}" style="background:${ledColor}; box-shadow:${isActive ? `0 0 8px ${ledColor}` : 'none'}"></div>
+        </div>
+      </div>
+
+      <div class="agent-task">
+        ${isActive ? '<span class="task-arrow">▶</span>' : ''}
+        <span>${escHtml(agent.task || 'Idle')}</span>
+        ${isActive ? '<span class="cursor-blink"></span>' : ''}
+      </div>
+
+      <div class="progress-track">
+        <div class="progress-bar ${barClass}" style="width:${progress}%"></div>
+      </div>
+
+      <div class="skills">
+        ${(agent.skills||[]).map((s,i) => `<span class="skill-tag${i===agent.skills.length-1 && isActive?' new':''}">${s}</span>`).join('')}
+      </div>
+
+      <div class="agent-footer">
+        <span>${(agent.status||'idle').toUpperCase()}</span>
+        <span>${agent.toolCalls||0} tool calls</span>
+      </div>
+    `;
+  });
+}
+
+function renderTools() {
+  const list = document.getElementById('tools-list');
+  const entries = Object.entries(toolCounts).sort((a,b) => b[1]-a[1]);
+  const max = entries[0]?.[1] || 1;
+
+  list.innerHTML = entries.map(([tool, count]) => `
+    <div class="tool-row">
+      <div class="tool-name">${tool}</div>
+      <div class="tool-bar-wrap">
+        <div class="tool-bar" style="width:${Math.round(count/max*100)}%"></div>
+      </div>
+      <div class="tool-count">${count}</div>
+    </div>
+  `).join('') || `<div style="font-size:9px;color:var(--muted);padding:6px 4px">No tools used yet</div>`;
+}
+
+// ── Log ────────────────────────────────────────────────────
+function addLog(type, text) {
+  logEntries.unshift({ type, text, ts: Date.now() });
+  if (logEntries.length > 80) logEntries.pop();
+  renderLog();
+}
+
+function renderLog() {
+  const container = document.getElementById('log-container');
+  container.innerHTML = logEntries.map(e => `
+    <div class="log-entry" style="border-left:2px solid ${LOG_COLOR[e.type]||'#374151'}">
+      <div class="log-icon" style="color:${LOG_COLOR[e.type]||'#6b7280'}">${LOG_ICON[e.type]||'·'}</div>
+      <div>
+        <div class="log-text">${escHtml(e.text)}</div>
+        <div class="log-time">${timeAgo(e.ts)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Helpers ────────────────────────────────────────────────
+function setBanner(cls, text) {
+  const b = document.getElementById('conn-banner');
+  b.className = cls;
+  b.textContent = text;
+}
+function setStatus(state, color, label) {
+  document.getElementById('status-dot').style.background = color;
+  document.getElementById('status-text').textContent = label;
+}
+function timeAgo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return `${s}s ago`;
+  return `${Math.floor(s/60)}m ago`;
+}
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Refresh timestamps every 10s
+setInterval(renderLog, 10000);
+
+connect();
+</script>
+</body>
+</html>
