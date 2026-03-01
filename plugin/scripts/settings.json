@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart":    [{ "type": "command", "command": "python3 .claude/hooks/send_event.py" }],
+    "SubagentStart":   [{ "type": "command", "command": "python3 .claude/hooks/send_event.py" }],
+    "SubagentStop":    [{ "type": "command", "command": "python3 .claude/hooks/send_event.py" }],
+    "PreToolUse":      [{ "type": "command", "command": "python3 .claude/hooks/send_event.py" }],
+    "PostToolUse":     [{ "type": "command", "command": "python3 .claude/hooks/send_event.py" }],
+    "PostToolUseFailure": [{ "type": "command", "command": "python3 .claude/hooks/send_event.py" }],
+    "Stop":            [{ "type": "command", "command": "python3 .claude/hooks/send_event.py" }]
+  }
+}
