@@ -83,6 +83,8 @@ export function createBrokerServer({
   uiPath = DEFAULT_UI_PATH,
   maxBodyBytes = DEFAULT_MAX_BODY_BYTES,
   companion = null,
+  // Optional companion controls: { settings, runner, approvals, codexModels }.
+  controls = null,
   onCompanionError = () => {},
 } = {}) {
   const webSockets = new WebSocketServer({ noServer: true });
@@ -142,6 +144,49 @@ export function createBrokerServer({
         sendJson(response, 200, await companion.snapshot());
         return;
       }
+      if (controls?.settings && request.method === "GET" && url.pathname === "/companion/settings") {
+        sendJson(response, 200, {
+          settings: controls.settings.get(),
+          traits: controls.traits || [],
+          codexModels: controls.codexModels ? await controls.codexModels() : [],
+          busy: Boolean(controls.runner?.busy),
+          approvals: controls.approvals?.list() || [],
+        });
+        return;
+      }
+      if (controls?.settings && request.method === "PUT" && url.pathname === "/companion/settings") {
+        if (!requireJson(request, response)) return;
+        const result = await controls.settings.update(await readJsonBody(request, 16 * 1024));
+        sendJson(response, result.ok ? 200 : 400, result);
+        if (result.ok) broadcast({ type: "companion", data: { type: "settings", settings: result.settings } });
+        return;
+      }
+      if (controls?.approvals && request.method === "POST" && url.pathname === "/companion/approval") {
+        if (!requireJson(request, response)) return;
+        const body = await readJsonBody(request, 64 * 1024);
+        const decision = await controls.approvals.request({ toolName: body?.tool_name, input: body?.input || {} });
+        sendJson(response, 200, decision);
+        return;
+      }
+      if (controls?.approvals && request.method === "POST" && url.pathname === "/companion/approval/decide") {
+        if (!requireJson(request, response)) return;
+        const body = await readJsonBody(request, 4 * 1024);
+        sendJson(response, controls.approvals.decide(String(body?.id || ""), body?.allow === true) ? 200 : 404, {});
+        return;
+      }
+      if (controls?.runner && request.method === "POST" && url.pathname === "/companion/agent/cancel") {
+        if (!requireJson(request, response)) return;
+        controls.approvals?.denyAll("Howard cancelled the task.");
+        sendJson(response, 200, { cancelled: controls.runner.cancel() });
+        return;
+      }
+      if (controls?.runner && request.method === "POST" && url.pathname === "/companion/agent/new") {
+        if (!requireJson(request, response)) return;
+        const { target, project } = controls.settings.get();
+        controls.runner.newConversation(target, project);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
       if (companion && request.method === "POST" && url.pathname === "/companion/notice") {
         if (!requireJson(request, response)) return;
         const body = await readJsonBody(request, 4 * 1024);
@@ -150,6 +195,7 @@ export function createBrokerServer({
           return;
         }
         sendJson(response, 202, { accepted: true });
+        if (controls?.settings && !controls.settings.get().commentOnApps) return;
         companion.noticeApp(body.app.slice(0, 64)).catch(onCompanionError);
         return;
       }
@@ -158,6 +204,16 @@ export function createBrokerServer({
         const body = await readJsonBody(request, 16 * 1024);
         if (typeof body?.text !== "string" || !body.text.trim()) {
           sendJson(response, 400, { error: "text_required" });
+          return;
+        }
+        const target = controls?.settings?.get().target || "mira";
+        if (target !== "mira" && controls?.runner) {
+          // Straight to the selected agent; progress streams over the WebSocket.
+          try {
+            sendJson(response, 202, { queued: true, ...controls.runner.run(body.text) });
+          } catch (error) {
+            sendJson(response, 409, { error: error.message });
+          }
           return;
         }
         sendJson(response, 200, { line: await companion.chat(body.text) });

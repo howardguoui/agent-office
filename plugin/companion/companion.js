@@ -186,6 +186,21 @@ export function createCompanion({
       return null;
     },
 
+    /** Howard sent work straight to an agent from her chat box: follow along and remember the outcome. */
+    async noteAgent(event) {
+      state.lastEventAt = now();
+      const who = event.agent === "codex" ? "Codex" : "Claude Code";
+      if (event.phase === "queued") {
+        setMood("focused");
+        await memory.addChat("user", `(to ${who} in ${event.project}) ${event.prompt || ""}`);
+      } else if (event.phase === "done") {
+        setMood("happy");
+        await memory.addChat("assistant", `(${who} answered) ${String(event.text || "").slice(0, 400)}`);
+      } else if (event.phase === "error") {
+        setMood("worried");
+      }
+    },
+
     /** She walked over to the window Howard just switched to. App name only, never the title. */
     async noticeApp(app) {
       const label = appLabel(app);

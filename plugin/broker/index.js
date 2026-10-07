@@ -3,7 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { createAgentRunner } from "../companion/agents.js";
+import { createApprovals } from "../companion/approvals.js";
 import { createCompanion } from "../companion/companion.js";
+import { TRAITS, codexModels, createSettings } from "../companion/settings.js";
 import { createMemory } from "../companion/memory.js";
 import { createOllama } from "../companion/ollama.js";
 import { createPersonaSource } from "../companion/persona.js";
@@ -35,22 +38,49 @@ const sidebar = createSidebarLauncher({ projectRoot, port });
 // The desktop companion: on by default, COMPANION=off disables her.
 let broker;
 const companionDir = path.join(dataRoot, "companion");
+const toOverlay = (message) => broker?.broadcast({ type: "companion", data: message });
+const settings = createSettings({ file: path.join(companionDir, "settings.json") });
+await settings.load();
 const companion =
   process.env.COMPANION === "off"
     ? null
     : createCompanion({
         llm: createOllama(),
         memory: createMemory({ file: path.join(companionDir, "memory.json") }),
-        loadPersona: createPersonaSource({ path: path.join(companionDir, "persona.md") }),
-        emit: (message) => broker?.broadcast({ type: "companion", data: message }),
+        loadPersona: async () => settings.persona(),
+        emit: toOverlay,
       });
 if (companion) setInterval(() => companion.tick().catch(() => {}), 60_000).unref();
+
+// Messages typed to her can go straight to Claude Code or Codex (settings.target). Claude Code asks for
+// permissions through the approval MCP server, which shows Allow / Deny in her bubble.
+const approvalMcpConfig = JSON.stringify({
+  mcpServers: {
+    companion: {
+      command: process.execPath,
+      args: [path.join(projectRoot, "companion", "approval-mcp.js")],
+      env: { AGENT_OFFICE_PORT: String(port) },
+    },
+  },
+});
+const approvals = createApprovals({ emit: toOverlay });
+const runner = createAgentRunner({
+  getSettings: () => settings.get(),
+  approvalMcpConfig,
+  emit: (event) => {
+    toOverlay(event);
+    companion?.noteAgent(event).catch(() => {});
+    if (event.phase === "done" || event.phase === "error") approvals.denyAll("The task ended.");
+  },
+});
+const controls = companion ? { settings, runner, approvals, codexModels, traits: Object.keys(TRAITS) } : null;
 
 broker = createBrokerServer({
   host,
   port,
   store,
   companion,
+  controls,
   openSidebar: async () => sidebar.open(),
 });
 
