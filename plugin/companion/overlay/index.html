@@ -35,13 +35,62 @@
   #mood[data-mood="alert"] i { background: var(--bad); animation: pulse 1s infinite; }
   #mood[data-mood="sleepy"] i { background: var(--sleep); }
   @keyframes pulse { 50% { opacity: 0.3; } }
-  #chat { display: flex; gap: 6px; width: 280px; }
+  #chat { display: flex; gap: 6px; width: 330px; }
   #chat-input {
     flex: 1; min-width: 0; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper);
     font: inherit; font-size: 13px; color: var(--ink); outline: none; box-shadow: 0 4px 16px rgba(20, 22, 40, 0.15);
   }
   #chat-input:focus { border-color: var(--accent); }
   #chat button { padding: 0 12px; border-radius: 12px; border: 0; background: var(--accent); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
+  /* gear, settings, agent activity, answer and approval cards */
+  #gear { position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line);
+    background: rgba(255,255,255,0.9); display: grid; place-items: center; cursor: pointer; padding: 0; }
+  #gear:hover { border-color: var(--accent); }
+  .card { position: absolute; left: 0; top: 0; background: var(--paper); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 14px; box-shadow: 0 10px 34px rgba(20,22,40,0.22); font-size: 13px; }
+  .card[hidden], #thought[hidden], #work[hidden] { display: none; }
+  .card header { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; font-weight: 600; }
+  .card header .x { margin-left: auto; border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; }
+  #settings { width: 340px; max-height: 80vh; overflow: auto; }
+  #settings form { padding: 0 12px 12px; display: grid; gap: 10px; }
+  #settings label.field { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
+  #settings input[type=text], #settings select, #settings textarea { font: inherit; font-size: 13px; color: var(--ink); padding: 7px 9px;
+    border: 1px solid var(--line); border-radius: 9px; background: #fff; outline: none; width: 100%; box-sizing: border-box; }
+  #settings textarea { min-height: 54px; resize: vertical; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .seg button { flex: 1; border: 0; background: #fff; padding: 7px 4px; font: inherit; font-size: 12px; cursor: pointer; color: var(--ink); }
+  .seg button[aria-pressed=true] { background: var(--accent); color: #fff; }
+  .row { display: flex; gap: 6px; }
+  .row > * { flex: 1; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; color: var(--ink); }
+  .chips button[aria-pressed=true] { background: rgba(109,91,208,0.12); border-color: var(--accent); color: var(--accent); }
+  .btn { border: 0; border-radius: 9px; padding: 8px 12px; font: inherit; font-size: 13px; cursor: pointer; background: var(--accent); color: #fff; }
+  .btn.ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+  .btn.bad { background: var(--bad); }
+  .err { color: var(--bad); font-size: 12px; }
+  .agent-only[hidden] { display: none; }
+  #answer { width: 360px; }
+  #answer .body { padding: 0 12px; max-height: 280px; overflow: auto; white-space: pre-wrap; line-height: 1.45; }
+  #answer footer, #approval footer { display: flex; gap: 6px; padding: 10px 12px; }
+  #approval { width: 300px; border-color: rgba(194,69,61,0.4); }
+  #approval .body { padding: 0 12px; }
+  #approval code { display: block; margin-top: 6px; padding: 6px 8px; border-radius: 7px; background: #f3f1fa; font: 12px ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-all; max-height: 90px; overflow: auto; }
+  #thought { position: absolute; left: 0; top: 0; width: 170px; pointer-events: none; }
+  #thought .label, #work .label { display: block; margin-top: 2px; text-align: center; font-size: 11px; color: var(--muted);
+    background: rgba(255,255,255,0.85); border-radius: 8px; padding: 2px 6px; }
+  #thought .dot { animation: bob 1.2s infinite ease-in-out; }
+  #thought .dot:nth-child(2) { animation-delay: 0.2s; } #thought .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bob { 0%, 100% { transform: translateY(0); opacity: 0.5; } 50% { transform: translateY(-4px); opacity: 1; } }
+  #work { position: absolute; left: 0; top: 0; width: 150px; }
+  #work .keys rect { animation: key 0.5s infinite steps(2); }
+  #work .keys rect:nth-child(2) { animation-delay: 0.15s; } #work .keys rect:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes key { 50% { opacity: 0.25; } }
+  #work .line { animation: grow 1.4s infinite linear; transform-origin: left; }
+  #work .line:nth-of-type(2) { animation-delay: 0.45s; } #work .line:nth-of-type(3) { animation-delay: 0.9s; }
+  @keyframes grow { 0% { transform: scaleX(0.1); } 100% { transform: scaleX(1); } }
+  #work .stop { pointer-events: auto; margin: 4px auto 0; display: block; border: 1px solid var(--line); background: #fff; border-radius: 8px; font: inherit; font-size: 11px; padding: 2px 8px; cursor: pointer; color: var(--muted); }
+  #target { align-self: center; font-size: 11px; color: var(--muted); background: rgba(255,255,255,0.9); border: 1px solid var(--line); border-radius: 8px; padding: 2px 6px; white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
   #status { position: absolute; left: 0; right: 0; top: 45%; text-align: center; color: var(--muted); font-size: 12px; }
 </style>
 </head>
@@ -50,8 +99,64 @@
   <canvas id="stage"></canvas>
   <div id="bubble" hidden><div id="bubble-text"></div></div>
   <div id="status">Loading...</div>
-  <form id="chat" hidden autocomplete="off"><input id="chat-input" maxlength="500" placeholder="Talk to her..." /><button type="submit">Send</button></form>
+  <form id="chat" hidden autocomplete="off"><span id="target">Mira</span><input id="chat-input" maxlength="4000" placeholder="Talk to her..." /><button type="submit">Send</button></form>
   <div id="mood" data-mood="idle"><i></i><span>relaxing</span></div>
+  <button id="gear" type="button" title="Settings" aria-label="Settings"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="#5e6578" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1l-.4-2.6h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L4.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>
+  <div id="thought" hidden>
+    <svg viewBox="0 0 170 90" width="170" height="90" aria-hidden="true">
+      <path d="M40 62c-16 0-26-10-23-22 3-11 16-15 25-11 5-12 22-17 34-9 9-9 27-7 33 5 13-2 25 7 23 20-1 11-12 18-24 17-6 8-21 9-30 3-9 6-27 6-38-3z" fill="#fff" stroke="rgba(31,36,51,.18)"/>
+      <circle cx="22" cy="78" r="6" fill="#fff" stroke="rgba(31,36,51,.18)"/><circle cx="10" cy="88" r="3.5" fill="#fff" stroke="rgba(31,36,51,.18)"/>
+      <g fill="#6d5bd0"><circle class="dot" cx="66" cy="42" r="5"/><circle class="dot" cx="84" cy="42" r="5"/><circle class="dot" cx="102" cy="42" r="5"/></g>
+    </svg>
+    <span class="label">thinking</span>
+  </div>
+  <div id="work" hidden>
+    <svg viewBox="0 0 150 92" width="150" height="92" aria-hidden="true">
+      <rect x="25" y="6" width="100" height="62" rx="6" fill="#1f2433"/><rect x="31" y="12" width="88" height="50" rx="3" fill="#2b3350"/>
+      <rect class="line" x="37" y="20" width="60" height="4" rx="2" fill="#8fd3a8"/><rect class="line" x="37" y="30" width="72" height="4" rx="2" fill="#a99bf0"/><rect class="line" x="37" y="40" width="48" height="4" rx="2" fill="#f2c27b"/>
+      <path d="M12 70h126l-10 14H22z" fill="#c9cede"/><g class="keys" fill="#8a92aa"><rect x="44" y="73" width="14" height="4" rx="1"/><rect x="66" y="73" width="18" height="4" rx="1"/><rect x="92" y="73" width="14" height="4" rx="1"/></g>
+    </svg>
+    <span class="label">working</span>
+    <button class="stop" type="button">Stop</button>
+  </div>
+  <section id="answer" class="card" hidden>
+    <header><span id="answer-title">Claude Code</span><button class="x" type="button" aria-label="Close">&#215;</button></header>
+    <div class="body" id="answer-body"></div>
+    <footer><button class="btn ghost" type="button" id="answer-copy">Copy</button><button class="btn ghost" type="button" id="answer-new">New conversation</button></footer>
+  </section>
+  <section id="approval" class="card" hidden>
+    <header><span id="approval-title">Claude wants to do something</span></header>
+    <div class="body"><span id="approval-label"></span><code id="approval-command" hidden></code></div>
+    <footer><button class="btn" type="button" id="approval-allow">Allow</button><button class="btn ghost" type="button" id="approval-deny">Deny</button></footer>
+  </section>
+  <section id="settings" class="card" hidden>
+    <header><span>Companion settings</span><button class="x" type="button" aria-label="Close">&#215;</button></header>
+    <form autocomplete="off">
+      <div class="field"><span class="err" id="settings-error"></span></div>
+      <label class="field">When I type, send it to
+        <div class="seg" id="set-target"><button type="button" data-v="mira">Her</button><button type="button" data-v="claude">Claude Code</button><button type="button" data-v="codex">Codex</button></div>
+      </label>
+      <label class="field agent-only">Project folder
+        <div class="row"><input type="text" id="set-project" list="recent-projects" placeholder="E:\ClaudeProject\..." /><button class="btn ghost" type="button" id="pick-folder" style="flex:0 0 auto">Browse</button></div>
+        <datalist id="recent-projects"></datalist>
+      </label>
+      <label class="field agent-only" data-agent="claude">Claude Code permissions
+        <select id="set-claude-permission"><option value="ask">Ask me in her bubble</option><option value="acceptEdits">Auto-accept file edits, ask for the rest</option><option value="plan">Plan only, no changes</option></select>
+      </label>
+      <div class="row agent-only" data-agent="codex">
+        <label class="field">Codex model<select id="set-codex-model"></select></label>
+        <label class="field">Codex access<select id="set-codex-sandbox"><option value="read-only">Read only</option><option value="workspace-write">Can edit the project</option></select></label>
+      </div>
+      <div class="row">
+        <label class="field">Character<select id="set-character"><option value="mao">Mao</option><option value="haru">Haru</option></select></label>
+        <label class="field">Her name<input type="text" id="set-name" maxlength="30" /></label>
+      </div>
+      <label class="field">Personality (up to 4)<div class="chips" id="set-traits"></div></label>
+      <label class="field">Anything else about her<textarea id="set-notes" maxlength="500" placeholder="e.g. Calls me boss. Loves cats and GPUs."></textarea></label>
+      <label class="field" style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" id="set-apps" /> Comment on the apps I switch to</label>
+      <div class="row"><button class="btn" type="submit">Save</button><button class="btn ghost" type="button" id="settings-cancel">Cancel</button></div>
+    </form>
+  </section>
 </div>
 <script>
   window.COMPANION_CONFIG = window.COMPANION_CONFIG || {

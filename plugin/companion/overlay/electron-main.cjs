@@ -1,7 +1,7 @@
 // Desktop companion window: a transparent layer over the whole work area of the main screen, always on top
 // and click-through except over the character, her bubble and the chat box. She walks on the taskbar and on
 // top of other windows, which a small watcher lists (frames and app names only).
-const { app, BrowserWindow, Menu, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, Menu, dialog, ipcMain, screen } = require("electron");
 const path = require("node:path");
 const http = require("node:http");
 const { createWindowWatcher } = require("./desktop-windows.cjs");
@@ -50,6 +50,10 @@ async function createWindow() {
 
   ipcMain.on("companion:interactive", (_event, on) => {
     win.setIgnoreMouseEvents(!on, { forward: true });
+  });
+  ipcMain.handle("companion:pick-folder", async () => {
+    const result = await dialog.showOpenDialog(win, { title: "Project folder for the agent", properties: ["openDirectory"] });
+    return result.canceled ? "" : result.filePaths[0] || "";
   });
   ipcMain.on("companion:menu", (_event, { models = [], current } = {}) => {
     const menu = Menu.buildFromTemplate([

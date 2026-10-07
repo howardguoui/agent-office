@@ -63,12 +63,22 @@ const ui = {
   chat: $("#chat"),
   input: $("#chat-input"),
   status: $("#status"),
+  target: $("#target"),
+  gear: $("#gear"),
+  settings: $("#settings"),
+  thought: $("#thought"),
+  work: $("#work"),
+  answer: $("#answer"),
+  approval: $("#approval"),
 };
+const AGENT_NAMES = { claude: "Claude Code", codex: "Codex" };
 
 const state = {
   app: null, model: null, spec: null, key: null, mood: "idle", talking: 0, typing: null, hideTimer: null,
   interactive: null, body: null, windows: [], surfaces: [], foregroundId: null, foregroundChanged: false,
   lastVisitAt: 0, pointer: { x: 0, y: 0, vx: 0, t: 0 }, press: null, busy: false,
+  activity: null, // null | "thinking" | "working" while an agent runs a message from her chat box
+  settings: null, traits: [], codexModels: [], approvalId: null, answerSide: 1,
 };
 
 function setStatus(text) { ui.status.textContent = text || ""; ui.status.hidden = !text; }
@@ -128,6 +138,18 @@ async function loadModel(app, key) {
     } else if (mode === "drag") {
       core.setParameterValueById("ParamAngleZ", 14 * Math.sin(now / 220));
       core.setParameterValueById("ParamBodyAngleZ", 10 * Math.sin(now / 220));
+    }
+    if (state.activity === "thinking") {
+      // Head tilted, eyes up, slow sway: pondering.
+      core.setParameterValueById("ParamAngleZ", 10 + 3 * Math.sin(now / 700));
+      core.setParameterValueById("ParamAngleX", 8 * Math.sin(now / 1100));
+      core.setParameterValueById("ParamEyeBallY", 0.7);
+      core.setParameterValueById("ParamEyeBallX", 0.4 * Math.sin(now / 900));
+    } else if (state.activity === "working") {
+      // Looking down at the laptop, quick little nods as she types along.
+      core.setParameterValueById("ParamAngleY", -14 + 4 * Math.sin(now / 120));
+      core.setParameterValueById("ParamEyeBallY", -0.6);
+      core.setParameterValueById("ParamBodyAngleX", 2 * Math.sin(now / 240));
     }
     if (state.mood === "sleepy" && spec.sleepyEyes !== undefined) {
       core.setParameterValueById("ParamEyeLOpen", spec.sleepyEyes);
@@ -207,7 +229,23 @@ function layoutUi() {
   const chatW = ui.chat.offsetWidth || 280;
   ui.chat.style.transform = `translate(${Math.max(8, Math.min(width - chatW - 8, body.x - chatW / 2))}px, ${Math.max(8, body.y - 46)}px)`;
   const moodW = ui.mood.offsetWidth || 90;
-  ui.mood.style.transform = `translate(${Math.max(8, Math.min(width - moodW - 8, body.x - moodW / 2))}px, ${Math.min(world().height - 26, body.y + 4)}px)`;
+  const moodX = Math.max(8, Math.min(width - moodW - 40, body.x - moodW / 2));
+  const moodY = Math.min(world().height - 26, body.y + 4);
+  ui.mood.style.transform = `translate(${moodX}px, ${moodY}px)`;
+  ui.gear.style.transform = `translate(${moodX + moodW + 6}px, ${moodY - 1}px)`;
+  const height = world().height;
+  const place = (el, x, y) => {
+    const w = el.offsetWidth || 300;
+    const h = el.offsetHeight || 200;
+    el.style.transform = `translate(${Math.max(8, Math.min(width - w - 8, x))}px, ${Math.max(8, Math.min(height - h - 8, y))}px)`;
+  };
+  if (!ui.thought.hidden) place(ui.thought, body.x + 30, head - 70);
+  if (!ui.work.hidden) place(ui.work, body.x - 75, body.y - HEIGHT * 0.52);
+  if (!ui.approval.hidden) place(ui.approval, body.x - 150, head - (ui.approval.offsetHeight || 150) - 10);
+  // Cards go on whichever side of her has more room.
+  const side = body.x > width / 2 ? -1 : 1;
+  if (!ui.answer.hidden) place(ui.answer, side > 0 ? body.x + 90 : body.x - 90 - (ui.answer.offsetWidth || 360), body.y - (ui.answer.offsetHeight || 300) - 40);
+  if (!ui.settings.hidden) place(ui.settings, side > 0 ? body.x + 90 : body.x - 90 - (ui.settings.offsetWidth || 340), body.y - (ui.settings.offsetHeight || 500));
 }
 
 function tick() {
@@ -247,6 +285,215 @@ function noticeApp(app) {
   }).catch(() => {});
 }
 
+// ---- agents: activity animation, answers, approvals ----
+
+function setActivity(activity, label = "") {
+  state.activity = activity;
+  ui.thought.hidden = activity !== "thinking";
+  ui.work.hidden = activity !== "working";
+  if (activity === "thinking") ui.thought.querySelector(".label").textContent = label || "thinking";
+  if (activity === "working") ui.work.querySelector(".label").textContent = label || "working";
+  layoutUi();
+}
+
+function showAnswer(event) {
+  $("#answer-title").textContent = `${AGENT_NAMES[event.agent] || "Agent"} · ${event.project || ""}`;
+  $("#answer-body").textContent = event.text || "(no answer)";
+  ui.answer.hidden = false;
+  layoutUi();
+}
+
+function handleAgent(event) {
+  const who = AGENT_NAMES[event.agent] || "The agent";
+  switch (event.phase) {
+    case "queued":
+      state.busy = true;
+      ui.answer.hidden = true;
+      setMood("focused");
+      setActivity("thinking", `sending to ${who}`);
+      break;
+    case "start":
+      setActivity("thinking", `${who} is reading`);
+      break;
+    case "thinking":
+      setActivity("thinking", event.tokens ? `thinking · ${event.tokens} tokens` : "thinking");
+      break;
+    case "tool":
+      setActivity("working", event.label);
+      break;
+    case "tool_done":
+      if (event.failed) ui.work.querySelector(".label").textContent = "that step failed, retrying...";
+      break;
+    case "message":
+      if (event.agent === "codex" && state.activity !== "working") setActivity("thinking", event.text.slice(0, 60));
+      break;
+    case "done":
+      state.busy = false;
+      setActivity(null);
+      setMood("happy");
+      state.model?.motion(state.spec.tap);
+      showAnswer(event);
+      break;
+    case "error":
+      state.busy = false;
+      setActivity(null);
+      say(`${who} ran into a problem: ${event.text}`, { mood: "worried", hold: 15000 });
+      break;
+    default:
+      break;
+  }
+}
+
+function showApproval(message) {
+  state.approvalId = message.id;
+  $("#approval-title").textContent = `${AGENT_NAMES[message.agent] || "Claude Code"} wants to:`;
+  $("#approval-label").textContent = message.label;
+  const command = $("#approval-command");
+  command.hidden = !message.command;
+  command.textContent = message.command || "";
+  ui.approval.hidden = false;
+  ui.bubble.hidden = true;
+  setMood("alert");
+  layoutUi();
+}
+
+async function decide(allow) {
+  const id = state.approvalId;
+  ui.approval.hidden = true;
+  state.approvalId = null;
+  if (!id) return;
+  await postJson("/companion/approval/decide", { id, allow }).catch(() => {});
+}
+
+// ---- settings ----
+
+async function postJson(url, body, method = "POST") {
+  const response = await fetch(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  return { ok: response.ok, status: response.status, body: await response.json().catch(() => ({})) };
+}
+
+function updateTargetBadge() {
+  const s = state.settings;
+  if (!s) return;
+  const name = s.persona?.name || "her";
+  const project = s.project ? s.project.split(/[\\/]/).pop() : "";
+  ui.target.textContent = s.target === "mira" ? name : `${AGENT_NAMES[s.target]}${project ? ` · ${project}` : ""}`;
+  ui.input.placeholder = s.target === "mira" ? `Talk to ${name}...` : `Message ${AGENT_NAMES[s.target]}...`;
+}
+
+async function loadSettings() {
+  if (config.feed !== "live") return;
+  try {
+    const data = await (await fetch("/companion/settings")).json();
+    state.settings = data.settings;
+    state.traits = data.traits || [];
+    state.codexModels = data.codexModels || [];
+    updateTargetBadge();
+    if (data.settings.character && data.settings.character !== state.key) switchModel(data.settings.character);
+    if (data.approvals?.length) showApproval(data.approvals.at(-1));
+  } catch { /* broker not ready yet */ }
+}
+
+function fillSettingsForm() {
+  const s = state.settings;
+  const form = ui.settings.querySelector("form");
+  $("#settings-error").textContent = "";
+  form.dataset.target = s.target;
+  form.querySelectorAll("#set-target button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === s.target)));
+  $("#set-project").value = s.project || "";
+  $("#recent-projects").innerHTML = (s.recentProjects || []).map((p) => `<option value="${p.replace(/"/g, "&quot;")}"></option>`).join("");
+  $("#set-claude-permission").value = s.claudePermission;
+  $("#set-codex-model").innerHTML = `<option value="">My Codex config</option>` + state.codexModels.map((m) => `<option value="${m.slug}">${m.name}</option>`).join("");
+  $("#set-codex-model").value = s.codexModel || "";
+  $("#set-codex-sandbox").value = s.codexSandbox;
+  $("#set-character").value = s.character || state.key;
+  $("#set-name").value = s.persona?.name || "";
+  $("#set-notes").value = s.persona?.notes || "";
+  $("#set-apps").checked = s.commentOnApps !== false;
+  $("#set-traits").innerHTML = state.traits.map((trait) => `<button type="button" data-trait="${trait}" aria-pressed="${(s.persona?.traits || []).includes(trait)}">${trait}</button>`).join("");
+  showAgentFields(s.target);
+}
+
+function showAgentFields(target) {
+  ui.settings.querySelectorAll(".agent-only").forEach((el) => {
+    el.hidden = target === "mira" || (el.dataset.agent && el.dataset.agent !== target);
+  });
+}
+
+function openSettings() {
+  if (!state.settings) return;
+  fillSettingsForm();
+  ui.settings.hidden = false;
+  layoutUi();
+}
+
+async function saveSettings() {
+  const form = ui.settings.querySelector("form");
+  const traits = [...form.querySelectorAll("#set-traits button[aria-pressed=true]")].map((b) => b.dataset.trait);
+  const patch = {
+    target: form.dataset.target,
+    project: $("#set-project").value.trim(),
+    claudePermission: $("#set-claude-permission").value,
+    codexModel: $("#set-codex-model").value,
+    codexSandbox: $("#set-codex-sandbox").value,
+    character: $("#set-character").value,
+    commentOnApps: $("#set-apps").checked,
+    persona: { name: $("#set-name").value, traits, notes: $("#set-notes").value },
+  };
+  const result = await postJson("/companion/settings", patch, "PUT");
+  if (!result.ok) {
+    $("#settings-error").textContent = (result.body.errors || ["Could not save."]).join(" ");
+    return;
+  }
+  applySettings(result.body.settings);
+  ui.settings.hidden = true;
+}
+
+function applySettings(settings) {
+  const characterChanged = settings.character && settings.character !== state.key;
+  state.settings = settings;
+  updateTargetBadge();
+  if (characterChanged) switchModel(settings.character);
+}
+
+function setupPanels() {
+  ui.gear.addEventListener("click", () => (ui.settings.hidden ? openSettings() : (ui.settings.hidden = true)));
+  ui.settings.querySelector(".x").addEventListener("click", () => { ui.settings.hidden = true; });
+  $("#settings-cancel").addEventListener("click", () => { ui.settings.hidden = true; });
+  ui.settings.querySelector("form").addEventListener("submit", (event) => { event.preventDefault(); saveSettings(); });
+  $("#set-target").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-v]");
+    if (!button) return;
+    const form = ui.settings.querySelector("form");
+    form.dataset.target = button.dataset.v;
+    form.querySelectorAll("#set-target button").forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+    showAgentFields(button.dataset.v);
+    layoutUi();
+  });
+  $("#set-traits").addEventListener("click", (event) => {
+    const chip = event.target.closest("button[data-trait]");
+    if (!chip) return;
+    const on = chip.getAttribute("aria-pressed") !== "true";
+    if (on && ui.settings.querySelectorAll("#set-traits button[aria-pressed=true]").length >= 4) return;
+    chip.setAttribute("aria-pressed", String(on));
+  });
+  $("#pick-folder").addEventListener("click", async () => {
+    const folder = await bridge?.pickFolder?.();
+    if (folder) $("#set-project").value = folder;
+  });
+  if (!bridge?.pickFolder) $("#pick-folder").hidden = true;
+  ui.answer.querySelector(".x").addEventListener("click", () => { ui.answer.hidden = true; });
+  $("#answer-copy").addEventListener("click", () => navigator.clipboard?.writeText($("#answer-body").textContent).catch(() => {}));
+  $("#answer-new").addEventListener("click", async () => {
+    await postJson("/companion/agent/new", {}).catch(() => {});
+    ui.answer.hidden = true;
+    say("Fresh start. What's next?");
+  });
+  $("#approval-allow").addEventListener("click", () => decide(true));
+  $("#approval-deny").addEventListener("click", () => decide(false));
+  ui.work.querySelector(".stop").addEventListener("click", () => postJson("/companion/agent/cancel", {}).catch(() => {}));
+}
+
 // ---- chat ----
 
 function openChat() {
@@ -258,22 +505,30 @@ function openChat() {
 
 async function sendChat(text) {
   ui.input.value = "";
-  say("...", { hold: 60_000 });
+  const toAgent = state.settings && state.settings.target !== "mira";
+  if (!toAgent) say("...", { hold: 60_000 });
   try {
-    const response = await fetch(config.chatUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    // The reply also arrives over the WebSocket as a "say"; only show it here if there is no socket.
-    if (!state.socket) say((await response.json()).line.text);
+    const result = await postJson(config.chatUrl, { text });
+    if (result.status === 409) {
+      say(result.body.error, { mood: "worried" });
+      return;
+    }
+    if (!result.ok) throw new Error(`HTTP ${result.status}`);
+    // Replies arrive over the WebSocket; only show it here if there is no socket.
+    if (!toAgent && !state.socket && result.body.line) say(result.body.line.text);
   } catch {
     say("I couldn't reach the broker. Is it running?", { mood: "worried" });
   }
 }
 
 function handleCompanionMessage(message) {
+  if (message.type === "agent") return handleAgent(message);
+  if (message.type === "approval") return showApproval(message);
+  if (message.type === "approval_closed") {
+    if (message.id === state.approvalId) { ui.approval.hidden = true; state.approvalId = null; }
+    return undefined;
+  }
+  if (message.type === "settings") return applySettings(message.settings);
   if (message.type === "mood") setMood(message.mood);
   if (message.type === "say") say(message.text, { mood: message.kind === "chat" ? undefined : moodFor(message) });
 }
@@ -285,7 +540,7 @@ function moodFor(message) {
 function connectLive() {
   const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
   const socket = new WebSocket(url);
-  socket.onopen = () => { state.socket = socket; setStatus(""); };
+  socket.onopen = () => { state.socket = socket; setStatus(""); loadSettings(); };
   socket.onmessage = (event) => {
     const message = JSON.parse(event.data);
     if (message.type === "companion") handleCompanionMessage(message.data);
@@ -328,7 +583,7 @@ function setupPointer(canvas) {
       startDrag(state.body);
       setMood("curious");
     }
-    const overUi = event.target.closest?.("#bubble, #chat, #mood");
+    const overUi = event.target.closest?.("#bubble, #chat, #mood, #gear, #settings, #answer, #approval, #work .stop");
     setInteractive(Boolean(state.press || overUi || overHer(event.clientX, event.clientY)));
   });
   canvas.addEventListener("pointerdown", (event) => {
@@ -378,6 +633,7 @@ async function main() {
   app.ticker.add(tick);
   setInteractive(false); // sync Electron with this page's starting state
   setupPointer(canvas);
+  setupPanels();
 
   ui.chat.addEventListener("submit", (event) => {
     event.preventDefault();
