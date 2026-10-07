@@ -58,6 +58,7 @@ test("greets a new session, focuses while tools run, and worries on failure", as
   assert.equal(companion.state.mood, "worried");
   assert.equal(worry.kind, "failure");
   assert.match(llm.calls.at(-1).messages.at(-1).content, /Claude's Bash just failed in filings-rag/);
+  assert.match(llm.calls.at(-1).messages.at(-1).content, /must not repeat in wording or opening words: "ok: \(Event\) Claude just started/);
 });
 
 test("respects the cooldown, except when an agent is waiting for approval", async () => {

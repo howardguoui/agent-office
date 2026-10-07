@@ -67,13 +67,21 @@ export function createCompanion({
     state.lastSpokeAt = now();
     try {
       const { text: system } = await systemPrompt(details.project);
+      const recent = state.lines.filter((line) => line.kind !== "chat").slice(-3).map((line) => `"${line.text}"`);
       let text;
       let origin = "llm";
       try {
         text = await llm.chat(
           [
             { role: "system", content: system },
-            { role: "user", content: `(Event) ${moment.line}\nReact to Howard in one short line, in character.` },
+            {
+              role: "user",
+              content: [
+                `(Event) ${moment.line}`,
+                recent.length ? `Your last lines, which you must not repeat in wording or opening words: ${recent.join(" / ")}` : "",
+                "React to Howard in one short line, in character.",
+              ].filter(Boolean).join("\n"),
+            },
           ],
           { maxTokens: 80 },
         );
@@ -101,7 +109,7 @@ export function createCompanion({
           { role: "system", content: `You are ${persona.name}, writing a private memory note.` },
           {
             role: "user",
-            content: `Write one plain sentence (under 35 words) remembering this coding session, using only these facts: ${facts}`,
+            content: `Write one sentence (under 35 words) for your private diary about this coding session, in your own voice and past tense, for example "Watched Claude fix the reranker in filings-rag; one test run failed first." Use only these facts: ${facts}`,
           },
         ],
         { maxTokens: 70, temperature: 0.3 },
