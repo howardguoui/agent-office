@@ -10,6 +10,7 @@ export const MODELS = {
     label: "Mao",
     url: `${MODEL_BASE}/Mao/Mao.model3.json`,
     mouth: "ParamA",
+    zoom: 1.75, top: 0.07,
     expressions: { idle: "exp_01", focused: "exp_01", curious: "exp_04", happy: "exp_02", worried: "exp_05", alert: "exp_07", sleepy: "exp_03", shy: "exp_06" },
     tap: "TapBody",
   },
@@ -17,6 +18,7 @@ export const MODELS = {
     label: "Haru",
     url: `${MODEL_BASE}/Haru/Haru.model3.json`,
     mouth: "ParamMouthOpenY",
+    zoom: 1.75, top: 0.07,
     expressions: { idle: "F01", focused: "F01", curious: "F02", happy: "F05", worried: "F04", alert: "F06", sleepy: "F01", shy: "F07" },
     sleepyEyes: 0.25,
     tap: "TapBody",
@@ -101,14 +103,20 @@ function setInteractive(on) {
 async function loadModel(app, key) {
   const spec = MODELS[key];
   const model = await window.PIXI.live2d.Live2DModel.from(spec.url, { autoHitTest: true, autoFocus: true });
+  // Frame her from the top of the head to about mid-thigh, centred, leaving room for the bubble.
   const fit = () => {
-    const scale = Math.min((app.screen.height * 0.92) / model.internalModel.height, (app.screen.width * 1.0) / model.internalModel.width);
+    const { width, height } = app.screen;
+    if (!width || !height) return;
+    const naturalW = model.internalModel.originalWidth;
+    const naturalH = model.internalModel.originalHeight;
+    const scale = Math.min((height * spec.zoom) / naturalH, (width * 1.35) / naturalW);
     model.scale.set(scale);
-    model.x = (app.screen.width - model.width) / 2;
-    model.y = app.screen.height - model.height;
+    model.x = (width - naturalW * scale) / 2;
+    model.y = height * spec.top;
   };
   fit();
-  window.addEventListener("resize", fit);
+  app.renderer.on("resize", fit);
+  app.ticker.addOnce(fit);
   app.stage.addChild(model);
 
   // Mouth moves while the bubble types (no audio), eyes droop when sleepy.
