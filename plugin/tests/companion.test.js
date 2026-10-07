@@ -180,3 +180,15 @@ test("Ollama client sends a non-thinking chat request and cleans the reply", asy
   assert.equal(sent.body.options.num_predict, 50);
   assert.equal(cleanReply("  assistant: hello "), "hello");
 });
+
+test("comments on the app she walks over to, at most every few minutes", async () => {
+  const { companion, llm, clock } = setup({ cooldownMs: 0 });
+  const first = await companion.noticeApp("Code");
+  assert.equal(first.kind, "app");
+  assert.match(llm.calls.at(-1).messages.at(-1).content, /switched to VS Code/);
+  clock.advance(60_000);
+  assert.equal(await companion.noticeApp("chrome"), null);
+  clock.advance(3 * 60_000);
+  assert.equal((await companion.noticeApp("chrome")).kind, "app");
+  assert.equal(await companion.noticeApp("ApplicationFrameHost"), null);
+});

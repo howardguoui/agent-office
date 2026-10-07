@@ -95,6 +95,7 @@ test("passes events to the companion without waiting for it, and serves her rout
     observe: (event) => { observed.push(event); return new Promise((resolve) => { release = resolve; }); },
     snapshot: async () => ({ name: "Mira", mood: "focused" }),
     chat: async (text) => ({ kind: "chat", text: `you said ${text}` }),
+    noticeApp: async (app) => { observed.push({ app }); return null; },
   };
   const broker = createBrokerServer({ host: "127.0.0.1", port: 0, store: createStateStore(), companion });
   const { port } = await broker.start();
@@ -120,6 +121,11 @@ test("passes events to the companion without waiting for it, and serves her rout
     assert.equal(plain.status, 415); // a web page cannot post here without a CORS preflight, which is refused
     const empty = await fetch(`${base}/companion/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     assert.equal(empty.status, 400);
+    const notice = await fetch(`${base}/companion/notice`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "app", app: "chrome" }) });
+    assert.equal(notice.status, 202);
+    assert.deepEqual(observed.at(-1), { app: "chrome" });
+    const bad = await fetch(`${base}/companion/notice`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "title", text: "secret" }) });
+    assert.equal(bad.status, 400);
   } finally {
     await broker.close();
   }
@@ -153,6 +159,8 @@ test("serves the companion overlay, its script and only the vendored libraries",
     assert.match(page.headers.get("content-security-policy"), /script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https:\/\/cubism\.live2d\.com/);
     assert.match(await page.text(), /<canvas id="stage">/);
     assert.match(await (await fetch(`${base}/companion/app.js`)).text(), /Live2DModel\.from/);
+    assert.match(await (await fetch(`${base}/companion/behavior.js`)).text(), /export function step/);
+    assert.equal((await fetch(`${base}/companion/server.js`)).status, 404);
     for (const [file, minBytes] of [["pixi.min.js", 100_000], ["unsafe-eval.min.js", 1_000], ["cubism4.min.js", 100_000]]) {
       const lib = await fetch(`${base}/companion/vendor/${file}`);
       assert.equal(lib.status, 200, file);

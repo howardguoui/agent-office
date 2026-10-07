@@ -11,6 +11,7 @@ const DEFAULT_MAX_BODY_BYTES = 128 * 1024;
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_UI_PATH = path.join(PROJECT_ROOT, "sidebar", "index.html");
 const OVERLAY_DIR = path.join(PROJECT_ROOT, "companion", "overlay");
+const OVERLAY_SCRIPTS = new Set(["/companion/app.js", "/companion/behavior.js"]);
 // The only files the overlay may load from node_modules.
 const VENDOR_FILES = {
   "/companion/vendor/pixi.min.js": path.join(PROJECT_ROOT, "node_modules", "pixi.js", "dist", "pixi.min.js"),
@@ -129,8 +130,8 @@ export function createBrokerServer({
         await sendFile(response, path.join(OVERLAY_DIR, "index.html"), "text/html; charset=utf-8", { "content-security-policy": OVERLAY_CSP });
         return;
       }
-      if (request.method === "GET" && url.pathname === "/companion/app.js") {
-        await sendFile(response, path.join(OVERLAY_DIR, "app.js"), "text/javascript; charset=utf-8");
+      if (request.method === "GET" && OVERLAY_SCRIPTS.has(url.pathname)) {
+        await sendFile(response, path.join(OVERLAY_DIR, path.basename(url.pathname)), "text/javascript; charset=utf-8");
         return;
       }
       if (request.method === "GET" && VENDOR_FILES[url.pathname]) {
@@ -139,6 +140,17 @@ export function createBrokerServer({
       }
       if (companion && request.method === "GET" && url.pathname === "/companion") {
         sendJson(response, 200, await companion.snapshot());
+        return;
+      }
+      if (companion && request.method === "POST" && url.pathname === "/companion/notice") {
+        if (!requireJson(request, response)) return;
+        const body = await readJsonBody(request, 4 * 1024);
+        if (body?.kind !== "app" || typeof body.app !== "string") {
+          sendJson(response, 400, { error: "unknown_notice" });
+          return;
+        }
+        sendJson(response, 202, { accepted: true });
+        companion.noticeApp(body.app.slice(0, 64)).catch(onCompanionError);
         return;
       }
       if (companion && request.method === "POST" && url.pathname === "/companion/chat") {

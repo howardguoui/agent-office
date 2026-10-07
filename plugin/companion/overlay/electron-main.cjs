@@ -1,13 +1,14 @@
-// Desktop companion window: transparent, frameless, always on top, click-through except over the
-// character, her bubble and the chat box. Loads the overlay page from the local broker.
+// Desktop companion window: a transparent layer over the whole work area of the main screen, always on top
+// and click-through except over the character, her bubble and the chat box. She walks on the taskbar and on
+// top of other windows, which a small watcher lists (frames and app names only).
 const { app, BrowserWindow, Menu, ipcMain, screen } = require("electron");
 const path = require("node:path");
 const http = require("node:http");
+const { createWindowWatcher } = require("./desktop-windows.cjs");
 
 const portArg = process.argv.find((arg) => arg.startsWith("--port="));
 const PORT = Number(portArg ? portArg.slice("--port=".length) : process.env.AGENT_OFFICE_PORT || 4242);
 const URL = `http://127.0.0.1:${PORT}/companion/overlay`;
-const SIZE = { width: 360, height: 560 };
 
 if (!app.requestSingleInstanceLock()) app.quit();
 
@@ -19,17 +20,18 @@ function brokerReady() {
 }
 
 async function createWindow() {
-  const { workArea } = screen.getPrimaryDisplay();
+  const display = screen.getPrimaryDisplay();
+  const { workArea } = display;
   const win = new BrowserWindow({
-    ...SIZE,
-    x: workArea.x + workArea.width - SIZE.width - 24,
-    y: workArea.y + workArea.height - SIZE.height,
+    ...workArea,
     transparent: true,
     frame: false,
     resizable: false,
+    movable: false,
     hasShadow: false,
     skipTaskbar: true,
     alwaysOnTop: true,
+    focusable: true,
     title: "Agent Office Companion",
     backgroundColor: "#00000000",
     webPreferences: {
@@ -74,6 +76,19 @@ async function createWindow() {
     }
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
+  const watcher = createWindowWatcher({
+    getGeometry: () => {
+      const primary = screen.getPrimaryDisplay();
+      return { workArea: primary.workArea, scaleFactor: primary.scaleFactor };
+    },
+    onWindows: (windows) => {
+      if (!win.isDestroyed()) win.webContents.send("companion:windows", windows);
+    },
+  });
+  win.on("closed", () => watcher.stop());
+  screen.on("display-metrics-changed", () => {
+    if (!win.isDestroyed()) win.setBounds(screen.getPrimaryDisplay().workArea);
+  });
   return win;
 }
 

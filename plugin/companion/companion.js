@@ -4,6 +4,17 @@
 import { SLEEPY_AFTER_MS, agentName, describeDigest, emptyDigest, react, updateDigest } from "./mood.js";
 
 export const SESSION_IDLE_MS = 30 * 60_000;
+export const APP_COMMENT_COOLDOWN_MS = 3 * 60_000;
+
+// Friendly names for common Windows process names; anything else is shown as-is.
+const APP_NAMES = {
+  chrome: "Chrome", msedge: "Edge", firefox: "Firefox", code: "VS Code", cursor: "Cursor", explorer: "File Explorer",
+  windowsterminal: "Windows Terminal", powershell: "PowerShell", cmd: "the command prompt", claude: "the Claude app",
+  slack: "Slack", discord: "Discord", spotify: "Spotify", steam: "Steam", obsidian: "Obsidian", notepad: "Notepad",
+  winword: "Word", excel: "Excel", powerpnt: "PowerPoint", outlook: "Outlook", teams: "Teams", ms_teams: "Teams",
+  wechat: "WeChat", weixin: "WeChat", telegram: "Telegram", figma: "Figma", vlc: "VLC", potplayermini64: "PotPlayer",
+};
+export const appLabel = (app) => APP_NAMES[String(app || "").toLowerCase()] || String(app || "").slice(0, 40);
 
 const FALLBACK = {
   session_start: (m) => `Oh, ${m.who} is up. Let's see what we're building today.`,
@@ -11,6 +22,7 @@ const FALLBACK = {
   waiting: (m) => `${m.who} is waiting for you. Go take a look?`,
   done: (m) => `${m.who} finished. Nice work, you two.`,
   sleepy: () => "It's quiet... I'll rest my eyes until the agents wake up.",
+  app: (m) => `Ooh, ${m.app}. What are we doing here?`,
 };
 
 function memoryBlock(recall) {
@@ -38,6 +50,7 @@ export function createCompanion({
     speaking: false,
     lines: [],
     digests: {},
+    lastAppCommentAt: -Infinity,
   };
 
   function say(entry) {
@@ -171,6 +184,21 @@ export function createCompanion({
         return say({ kind: "sleepy", text: FALLBACK.sleepy(), origin: "fallback" });
       }
       return null;
+    },
+
+    /** She walked over to the window Howard just switched to. App name only, never the title. */
+    async noticeApp(app) {
+      const label = appLabel(app);
+      if (!label || /^(electron|applicationframehost|shellexperiencehost|searchhost)$/i.test(app)) return null;
+      const t = now();
+      if (t - state.lastAppCommentAt < APP_COMMENT_COOLDOWN_MS || t - state.lastSpokeAt < cooldownMs || state.speaking) return null;
+      state.lastAppCommentAt = t;
+      state.lastEventAt = t;
+      setMood("curious");
+      return speak(
+        { kind: "app", line: `Howard just switched to ${label}, so you hopped onto that window to see. You only know the app's name.` },
+        { app: label, project: "" },
+      );
     },
 
     async chat(text) {
