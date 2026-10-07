@@ -53,6 +53,17 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
 }
 `;
 
+/**
+ * True when the window in front covers the whole display (a game, a fullscreen video or presentation):
+ * the companion should get out of the way. Works on physical-pixel frames.
+ */
+function fullscreenInFront(windows, { displayBounds, scaleFactor, ownPid }) {
+  const fg = windows.find((w) => w.foreground && w.pid !== ownPid && !w.minimized);
+  if (!fg) return false;
+  const b = { x: displayBounds.x * scaleFactor, y: displayBounds.y * scaleFactor, w: displayBounds.width * scaleFactor, h: displayBounds.height * scaleFactor };
+  return fg.x <= b.x + 2 && fg.y <= b.y + 2 && fg.x + fg.w >= b.x + b.w - 2 && fg.y + fg.h >= b.y + b.h - 2;
+}
+
 /** Convert physical-pixel window frames to the overlay's CSS pixels, relative to the work area. */
 function toOverlay(windows, { workArea, scaleFactor, ownPid }) {
   return windows
@@ -67,7 +78,7 @@ function toOverlay(windows, { workArea, scaleFactor, ownPid }) {
     .filter((w) => w.x + w.w > 0 && w.x < workArea.width && w.y + w.h > 0 && w.y < workArea.height);
 }
 
-function createWindowWatcher({ intervalMs = 1500, onWindows, getGeometry, ownPid = process.pid, spawnImpl = spawn } = {}) {
+function createWindowWatcher({ intervalMs = 1500, onWindows, onFullscreen = () => {}, getGeometry, ownPid = process.pid, spawnImpl = spawn } = {}) {
   if (process.platform !== "win32" && spawnImpl === spawn) return { stop() {} };
   const encoded = Buffer.from(SCRIPT, "utf16le").toString("base64");
   const child = spawnImpl("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded], {
@@ -85,7 +96,10 @@ function createWindowWatcher({ intervalMs = 1500, onWindows, getGeometry, ownPid
       pending = false;
       if (!line.startsWith("[")) continue;
       try {
-        onWindows(toOverlay(JSON.parse(line), { ...getGeometry(), ownPid }));
+        const raw = JSON.parse(line);
+        const geometry = { ...getGeometry(), ownPid };
+        onFullscreen(fullscreenInFront(raw, geometry));
+        onWindows(toOverlay(raw, geometry));
       } catch {
         // ignore a malformed line; the next poll will try again
       }
@@ -105,4 +119,4 @@ function createWindowWatcher({ intervalMs = 1500, onWindows, getGeometry, ownPid
   };
 }
 
-module.exports = { createWindowWatcher, toOverlay, SCRIPT };
+module.exports = { createWindowWatcher, toOverlay, fullscreenInFront, SCRIPT };

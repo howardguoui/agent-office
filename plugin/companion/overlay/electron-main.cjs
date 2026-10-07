@@ -19,6 +19,8 @@ function brokerReady() {
   });
 }
 
+let hiddenByUser = false;
+
 async function createWindow() {
   const display = screen.getPrimaryDisplay();
   const { workArea } = display;
@@ -58,7 +60,7 @@ async function createWindow() {
         click: () => win.webContents.send("companion:switch-model", key),
       })),
       { type: "separator" },
-      { label: "Hide for 30 minutes", click: () => { win.hide(); setTimeout(() => win.showInactive(), 30 * 60_000); } },
+      { label: "Hide for 30 minutes", click: () => { hiddenByUser = true; win.hide(); setTimeout(() => { hiddenByUser = false; win.showInactive(); }, 30 * 60_000); } },
       { label: "Quit companion", click: () => app.quit() },
     ]);
     menu.popup({ window: win });
@@ -79,7 +81,13 @@ async function createWindow() {
   const watcher = createWindowWatcher({
     getGeometry: () => {
       const primary = screen.getPrimaryDisplay();
-      return { workArea: primary.workArea, scaleFactor: primary.scaleFactor };
+      return { workArea: primary.workArea, displayBounds: primary.bounds, scaleFactor: primary.scaleFactor };
+    },
+    // Game mode: hide while a fullscreen app (game, video) is in front, come back afterwards.
+    onFullscreen: (fullscreen) => {
+      if (win.isDestroyed() || hiddenByUser) return;
+      if (fullscreen && win.isVisible()) win.hide();
+      else if (!fullscreen && !win.isVisible()) win.showInactive();
     },
     onWindows: (windows) => {
       if (!win.isDestroyed()) win.webContents.send("companion:windows", windows);
