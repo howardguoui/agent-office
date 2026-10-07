@@ -90,12 +90,19 @@ export function parseCodexLine(line) {
   return [];
 }
 
+export const ASK_ALWAYS = ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit", "WebFetch"];
+export const ASK_WHEN_ACCEPTING_EDITS = ["Bash", "WebFetch"];
+
 export function claudeCommand({ sessionId, permission = "ask", approvalMcpConfig } = {}) {
   const args = ["-p", "--output-format", "stream-json", "--verbose"];
   const mode = { ask: "default", acceptEdits: "acceptEdits", plan: "plan" }[permission] || "default";
   args.push("--permission-mode", mode);
   if (approvalMcpConfig && mode !== "plan") {
     args.push("--mcp-config", approvalMcpConfig, "--permission-prompt-tool", "mcp__companion__approve");
+    // "ask" rules beat "allow" rules, so even with allow-everything user settings these tools come to
+    // Howard for approval on runs started from the companion. His settings files are not changed.
+    const ask = mode === "acceptEdits" ? ASK_WHEN_ACCEPTING_EDITS : ASK_ALWAYS;
+    args.push("--settings", JSON.stringify({ permissions: { ask } }));
   }
   if (sessionId) args.push("--resume", sessionId);
   return { file: "claude", args };

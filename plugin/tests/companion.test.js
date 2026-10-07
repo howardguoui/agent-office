@@ -49,6 +49,7 @@ test("greets a new session, focuses while tools run, and worries on failure", as
   assert.equal(hello.kind, "session_start");
   assert.match(llm.calls[0].messages.at(-1).content, /Claude just started a session in filings-rag/);
   assert.match(llm.calls[0].messages[0].content, /You are Mira/);
+  assert.match(llm.calls[0].messages[0].content, /powered by fake, a local model running through Ollama/);
 
   await companion.observe(ev({ source: "claude", hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "pytest -q" } }));
   assert.equal(companion.state.mood, "focused");

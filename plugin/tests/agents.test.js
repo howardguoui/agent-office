@@ -54,7 +54,8 @@ test("tool labels use names only", () => {
 });
 
 test("builds the CLI commands for each permission and sandbox setting", () => {
-  assert.deepEqual(claudeCommand({ permission: "ask", approvalMcpConfig: "{}" }).args, ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "default", "--mcp-config", "{}", "--permission-prompt-tool", "mcp__companion__approve"]);
+  assert.deepEqual(claudeCommand({ permission: "ask", approvalMcpConfig: "{}" }).args, ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "default", "--mcp-config", "{}", "--permission-prompt-tool", "mcp__companion__approve", "--settings", JSON.stringify({ permissions: { ask: ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit", "WebFetch"] } })]);
+  assert.match(claudeCommand({ permission: "acceptEdits", approvalMcpConfig: "{}" }).args.at(-1), /"ask":\["Bash","WebFetch"\]/);
   assert.deepEqual(claudeCommand({ permission: "plan", sessionId: "s1", approvalMcpConfig: "{}" }).args.slice(4), ["--permission-mode", "plan", "--resume", "s1"]);
   const codex = codexCommand({ model: "gpt-5.6-terra", sandbox: "workspace-write", cwd: "E:\\p", env: { APPDATA: "C:\\Users\\h\\AppData\\Roaming" }, nodePath: "node", exists: () => true });
   assert.equal(codex.file, "node");

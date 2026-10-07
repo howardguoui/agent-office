@@ -71,7 +71,10 @@ export function createCompanion({
   async function systemPrompt(project = "") {
     const persona = await loadPersona();
     const recall = await memory.recall({ project });
-    return { persona, recall, text: [persona.text, memoryBlock(recall)].filter(Boolean).join("\n\n") };
+    const self = llm.model
+      ? `If asked what you run on: you are powered by ${llm.model}, a local model running through Ollama on Howard's own GPU. Never claim to have no model.`
+      : "";
+    return { persona, recall, text: [persona.text, self, memoryBlock(recall)].filter(Boolean).join("\n\n") };
   }
 
   async function speak(moment, details) {
