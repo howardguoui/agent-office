@@ -5,7 +5,9 @@
   "type": "module",
   "main": "mcp-server/index.js",
   "scripts": {
-    "start": "node mcp-server/index.js",
+    "start": "node broker/index.js",
+    "start:mcp": "node mcp-server/index.js",
+    "test": "node --test",
     "install-electron": "npm install electron --save-dev"
   },
   "dependencies": {
@@ -13,6 +15,6 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "electron": "^33.4.11"
+    "electron": "^43.1.1"
   }
 }
