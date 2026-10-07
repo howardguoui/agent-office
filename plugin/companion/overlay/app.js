@@ -204,6 +204,7 @@ async function main() {
   setStatus("Loading...");
   await loadScript(config.core);
   await loadScript(config.vendor.pixi);
+  if (config.vendor.unsafeEval) await loadScript(config.vendor.unsafeEval);
   await loadScript(config.vendor.live2d);
   const PIXI = window.PIXI;
   const canvas = $("#stage");

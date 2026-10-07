@@ -14,6 +14,8 @@ const OVERLAY_DIR = path.join(PROJECT_ROOT, "companion", "overlay");
 // The only files the overlay may load from node_modules.
 const VENDOR_FILES = {
   "/companion/vendor/pixi.min.js": path.join(PROJECT_ROOT, "node_modules", "pixi.js", "dist", "pixi.min.js"),
+  // Lets PixiJS run without eval, so the overlay's CSP can forbid it.
+  "/companion/vendor/unsafe-eval.min.js": path.join(PROJECT_ROOT, "node_modules", "@pixi", "unsafe-eval", "dist", "unsafe-eval.min.js"),
   "/companion/vendor/cubism4.min.js": path.join(PROJECT_ROOT, "node_modules", "pixi-live2d-display-lipsyncpatch", "dist", "cubism4.min.js"),
 };
 export const OVERLAY_CSP = [
