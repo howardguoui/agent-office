@@ -10,6 +10,26 @@ import { createStateStore } from "./state-store.js";
 const DEFAULT_MAX_BODY_BYTES = 128 * 1024;
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_UI_PATH = path.join(PROJECT_ROOT, "sidebar", "index.html");
+const OVERLAY_DIR = path.join(PROJECT_ROOT, "companion", "overlay");
+// The only files the overlay may load from node_modules.
+const VENDOR_FILES = {
+  "/companion/vendor/pixi.min.js": path.join(PROJECT_ROOT, "node_modules", "pixi.js", "dist", "pixi.min.js"),
+  "/companion/vendor/cubism4.min.js": path.join(PROJECT_ROOT, "node_modules", "pixi-live2d-display-lipsyncpatch", "dist", "cubism4.min.js"),
+};
+export const OVERLAY_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cubism.live2d.com",
+  "connect-src 'self' ws: https://cdn.jsdelivr.net",
+  "img-src 'self' data: blob: https://cdn.jsdelivr.net",
+  "media-src 'self' https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline'",
+].join("; ");
+
+async function sendFile(response, file, contentType, extraHeaders = {}) {
+  const body = await readFile(file);
+  response.writeHead(200, { "content-type": contentType, "cache-control": "no-store", ...extraHeaders });
+  response.end(body);
+}
 
 function sendJson(response, statusCode, body) {
   const payload = JSON.stringify(body);
@@ -101,6 +121,18 @@ export function createBrokerServer({
         broadcastState();
         // The companion reacts in the background; a slow model must never delay the agent's hook.
         if (companion) companion.observe(event).catch(onCompanionError);
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/companion/overlay") {
+        await sendFile(response, path.join(OVERLAY_DIR, "index.html"), "text/html; charset=utf-8", { "content-security-policy": OVERLAY_CSP });
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/companion/app.js") {
+        await sendFile(response, path.join(OVERLAY_DIR, "app.js"), "text/javascript; charset=utf-8");
+        return;
+      }
+      if (request.method === "GET" && VENDOR_FILES[url.pathname]) {
+        await sendFile(response, VENDOR_FILES[url.pathname], "text/javascript; charset=utf-8");
         return;
       }
       if (companion && request.method === "GET" && url.pathname === "/companion") {

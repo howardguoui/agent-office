@@ -142,3 +142,25 @@ test("broadcasts companion messages to WebSocket clients", async () => {
     await broker.close();
   }
 });
+
+test("serves the companion overlay, its script and only the two vendored libraries", async () => {
+  const broker = createBrokerServer({ host: "127.0.0.1", port: 0, store: createStateStore() });
+  const { port } = await broker.start();
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    const page = await fetch(`${base}/companion/overlay`);
+    assert.equal(page.status, 200);
+    assert.match(page.headers.get("content-security-policy"), /script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https:\/\/cubism\.live2d\.com/);
+    assert.match(await page.text(), /<canvas id="stage">/);
+    assert.match(await (await fetch(`${base}/companion/app.js`)).text(), /Live2DModel\.from/);
+    for (const file of ["pixi.min.js", "cubism4.min.js"]) {
+      const lib = await fetch(`${base}/companion/vendor/${file}`);
+      assert.equal(lib.status, 200, file);
+      assert.ok((await lib.arrayBuffer()).byteLength > 100_000, file);
+    }
+    assert.equal((await fetch(`${base}/companion/vendor/../../package.json`)).status, 404);
+    assert.equal((await fetch(`${base}/companion/vendor/index.js`)).status, 404);
+  } finally {
+    await broker.close();
+  }
+});

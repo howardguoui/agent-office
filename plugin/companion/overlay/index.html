@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agent Office Companion</title>
+<style>
+  :root {
+    --ink: #1f2433; --muted: #5e6578; --paper: rgba(255, 255, 255, 0.94); --line: rgba(31, 36, 51, 0.12);
+    --accent: #6d5bd0; --good: #2f9e6a; --warn: #d9822b; --bad: #c2453d; --sleep: #7c8aa5;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+  body { background: transparent; }
+  #root { position: fixed; inset: 0; }
+  #stage { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #bubble {
+    position: absolute; left: 14px; right: 14px; top: 10px; padding: 12px 14px 12px; border-radius: 16px;
+    background: var(--paper); color: var(--ink); font-size: 14px; line-height: 1.45;
+    box-shadow: 0 6px 24px rgba(20, 22, 40, 0.18); border: 1px solid var(--line);
+  }
+  #bubble::after {
+    content: ""; position: absolute; bottom: -8px; left: 50%; width: 16px; height: 16px; transform: translateX(-50%) rotate(45deg);
+    background: var(--paper); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  }
+  #bubble[hidden], #chat[hidden], #status[hidden] { display: none; }
+  #mood {
+    position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.85); color: var(--muted); font-size: 11px;
+    border: 1px solid var(--line); white-space: nowrap;
+  }
+  #mood i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  #mood[data-mood="happy"] i { background: var(--good); }
+  #mood[data-mood="worried"] i { background: var(--warn); }
+  #mood[data-mood="alert"] i { background: var(--bad); animation: pulse 1s infinite; }
+  #mood[data-mood="sleepy"] i { background: var(--sleep); }
+  @keyframes pulse { 50% { opacity: 0.3; } }
+  #chat { position: absolute; left: 14px; right: 14px; bottom: 40px; display: flex; gap: 6px; }
+  #chat-input {
+    flex: 1; min-width: 0; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper);
+    font: inherit; font-size: 13px; color: var(--ink); outline: none;
+  }
+  #chat-input:focus { border-color: var(--accent); }
+  #chat button { padding: 0 12px; border-radius: 12px; border: 0; background: var(--accent); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
+  #grip {
+    position: absolute; right: 8px; bottom: 8px; width: 22px; height: 22px; border-radius: 6px; -webkit-app-region: drag;
+    background: rgba(255, 255, 255, 0.7); border: 1px solid var(--line); opacity: 0; transition: opacity 0.2s; cursor: move;
+  }
+  #grip svg { display: block; margin: 4px; }
+  #root:hover #grip { opacity: 1; }
+  .web #grip { display: none; }
+  #status { position: absolute; left: 0; right: 0; top: 45%; text-align: center; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="root">
+  <canvas id="stage"></canvas>
+  <div id="bubble" hidden><div id="bubble-text"></div></div>
+  <div id="status">Loading...</div>
+  <form id="chat" hidden autocomplete="off"><input id="chat-input" maxlength="500" placeholder="Talk to her..." /><button type="submit">Send</button></form>
+  <div id="mood" data-mood="idle"><i></i><span>relaxing</span></div>
+  <div id="grip" title="Drag to move"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 5h8M3 9h8" stroke="#5e6578" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+</div>
+<script>
+  window.COMPANION_CONFIG = window.COMPANION_CONFIG || {
+    core: "https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js",
+    vendor: { pixi: "/companion/vendor/pixi.min.js", live2d: "/companion/vendor/cubism4.min.js" },
+    feed: "live",
+    chatUrl: "/companion/chat",
+  };
+</script>
+<script type="module" src="/companion/app.js"></script>
+</body>
+</html>
