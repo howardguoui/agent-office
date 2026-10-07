@@ -185,8 +185,9 @@ async function switchModel(next) {
 // ---- her place in the world ----
 
 function world() {
+  // The renderer can report 0x0 before its first resize; fall back to the window size.
   const { width, height } = state.app.screen;
-  return { width, height };
+  return { width: width || window.innerWidth, height: height || window.innerHeight };
 }
 
 function updateSurfaces() {
@@ -620,6 +621,7 @@ async function main() {
   const app = new PIXI.Application({ view: canvas, resizeTo: window, backgroundAlpha: 0, antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1 });
   state.app = app;
   window.companionApp = app;
+  app.resize();
   try {
     await loadModel(app, pickModel());
   } catch (error) {
