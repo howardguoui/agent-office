@@ -11,16 +11,17 @@ test("sidebar consumes broker state snapshots over the dedicated WebSocket path"
   assert.match(html, /ev\.type === ['"]state['"]/);
 });
 
-test("sidebar exposes All, Claude, and Codex source filters and badges", async () => {
+test("sidebar exposes All, Claude, Codex and Gemini source filters and badges", async () => {
   const html = await readFile(UI_PATH, "utf8");
   assert.match(html, />All<\/button>/);
   assert.match(html, />Claude<\/button>/);
   assert.match(html, />Codex<\/button>/);
+  assert.match(html, />Gemini<\/button>/);
   assert.match(html, /source-badge/);
 });
 
-test("empty state names both supported hosts", async () => {
+test("empty state names all supported hosts", async () => {
   const html = await readFile(UI_PATH, "utf8");
-  assert.match(html, /Claude Code or Codex/);
+  assert.match(html, /Claude Code, Codex or Gemini CLI/);
 });
 

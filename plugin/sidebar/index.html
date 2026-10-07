@@ -27,6 +27,7 @@
   .source-badge { display:inline-flex; align-items:center; border:1px solid var(--border); border-radius:3px; padding:0 4px; margin-left:4px; font-size:7px; line-height:14px; text-transform:uppercase; letter-spacing:0.06em; }
   .source-badge.codex { color:#22d3ee; border-color:rgba(34,211,238,0.35); }
   .source-badge.claude { color:var(--orange); border-color:rgba(251,146,60,0.35); }
+  .source-badge.gemini { color:#a78bfa; border-color:rgba(167,139,250,0.35); }
 
   .stats-row { display:flex; }
   .stat { flex:1; text-align:center; padding:4px 0 8px; cursor:pointer; border-bottom:2px solid transparent; transition:all 0.2s; }
@@ -129,6 +130,7 @@
   <div class="source-filter">
     <button class="active" data-source="all" onclick="setSourceFilter('all')">All</button>
     <button data-source="claude" onclick="setSourceFilter('claude')">Claude</button>
+    <button data-source="gemini" onclick="setSourceFilter('gemini')">Gemini</button>
     <button data-source="codex" onclick="setSourceFilter('codex')">Codex</button>
   </div>
   <div class="stats-row">
@@ -238,9 +240,9 @@ function applyState(state) {
     const viewAgent = {
       id: agent.key,
       source,
-      name: `${source === 'codex' ? 'Codex' : source === 'claude' ? 'Claude' : 'Agent'} ${displayId}`,
-      role: source === 'codex' ? 'OpenAI Codex' : source === 'claude' ? 'Claude Code' : 'Unknown host',
-      emoji: source === 'codex' ? '◆' : source === 'claude' ? '◈' : '◇',
+      name: `${source === 'codex' ? 'Codex' : source === 'claude' ? 'Claude' : source === 'gemini' ? 'Gemini' : 'Agent'} ${displayId}`,
+      role: source === 'codex' ? 'OpenAI Codex' : source === 'claude' ? 'Claude Code' : source === 'gemini' ? 'Gemini CLI' : 'Unknown host',
+      emoji: source === 'codex' ? '◆' : source === 'claude' ? '◈' : source === 'gemini' ? '◎' : '◇',
       status: agent.status === 'done' ? 'completed' : agent.status,
       task: agent.currentTask ? `Using ${agent.currentTask}` : agent.status === 'done' ? 'Session completed' : 'Waiting for activity',
       progress: agent.status === 'done' ? 100 : agent.status === 'working' ? 65 : 10,
@@ -347,7 +349,7 @@ function renderAll() {
   const panel = document.getElementById('panel-agents');
   panel.innerHTML = '';
   const visible = visibleAgents();
-  if (visible.length === 0) { panel.appendChild(makeEmpty('⬡', 'No active agents<br>Run a task in Claude Code or Codex')); }
+  if (visible.length === 0) { panel.appendChild(makeEmpty('⬡', 'No active agents<br>Run a task in Claude Code, Codex or Gemini CLI')); }
   else { for (const a of visible) panel.appendChild(buildCard(a)); }
   renderRunningTab(); renderDoneTab(); renderHistoryTab(); updateStats();
 }
@@ -511,7 +513,7 @@ function checkAgentsEmpty() {
   const panel = document.getElementById('panel-agents');
   if (agents.size === 0 && !panel.querySelector('.empty')) {
     panel.innerHTML = '';
-    panel.appendChild(makeEmpty('⬡','No active agents<br>Run a task in Claude Code or Codex'));
+    panel.appendChild(makeEmpty('⬡','No active agents<br>Run a task in Claude Code, Codex or Gemini CLI'));
   }
 }
 

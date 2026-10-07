@@ -80,3 +80,19 @@ test("bounds in-memory event history", async () => {
   assert.equal(store.snapshot().events[0].toolName, "tool-1");
 });
 
+
+test("shows an agent waiting for permission, then back at work, and remembers its project", async () => {
+  const store = createStateStore();
+  await store.apply({ source: "claude", hook_event_name: "PreToolUse", session_id: "s", cwd: "/home/p/workflow-copilot", tool_name: "Bash", tool_input: { command: "pytest -q" } });
+  let agent = store.snapshot().agents[0];
+  assert.equal(agent.currentTask, "Bash pytest");
+  assert.equal(agent.project, "workflow-copilot");
+  await store.apply({ source: "claude", hook_event_name: "Notification", session_id: "s", notification_type: "permission_prompt" });
+  assert.equal(store.snapshot().agents[0].status, "waiting");
+  await store.apply({ source: "claude", hook_event_name: "PostToolUseFailure", session_id: "s", tool_name: "Bash" });
+  agent = store.snapshot().agents[0];
+  assert.equal(agent.status, "working");
+  assert.equal(agent.lastError.toolName, "Bash");
+  await store.apply({ source: "claude", hook_event_name: "Stop", session_id: "s" });
+  assert.equal(store.snapshot().agents[0].status, "done");
+});

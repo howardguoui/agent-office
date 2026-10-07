@@ -4,10 +4,15 @@ import { normalizeEvent } from "./event-normalizer.js";
 const STATUS_BY_EVENT = {
   SessionStart: "idle",
   SubagentStart: "idle",
+  UserPromptSubmit: "working",
   PreToolUse: "working",
-  PostToolUse: "idle",
+  PostToolUse: "working",
+  PostToolUseFailure: "working",
+  PermissionRequest: "waiting",
+  Idle: "done",
   SubagentStop: "done",
   Stop: "done",
+  SessionEnd: "done",
 };
 
 export function createStateStore({ maxEvents = 200, appendLog } = {}) {
@@ -38,11 +43,14 @@ export function createStateStore({ maxEvents = 200, appendLog } = {}) {
     if (nextStatus) agent.status = nextStatus;
     agent.updatedAt = event.timestamp;
 
+    if (event.context?.project) agent.project = event.context.project;
+    if (event.context?.failed) agent.lastError = { toolName: event.toolName || "", at: event.timestamp };
     if (event.eventName === "PreToolUse") {
-      agent.currentTask = event.toolName || "tool";
+      const detail = event.context?.target || event.context?.program || event.context?.host || "";
+      agent.currentTask = [event.toolName || "tool", detail].filter(Boolean).join(" ");
       const countKey = `${event.source}:${event.toolName || "unknown"}`;
       toolCounts[countKey] = (toolCounts[countKey] || 0) + 1;
-    } else if (event.eventName === "PostToolUse") {
+    } else if (event.eventName === "PostToolUse" || event.eventName === "PostToolUseFailure") {
       agent.currentTask = "";
     } else if (event.eventName === "Stop") {
       for (const candidate of agents.values()) {

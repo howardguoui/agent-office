@@ -11,6 +11,8 @@ const ALLOWED_FIELDS = [
   "actorKey",
   "toolName",
   "success",
+  "hostEvent",
+  "context",
 ];
 
 export function createMetadataLogger({ directory }) {
