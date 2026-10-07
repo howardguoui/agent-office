@@ -12,7 +12,7 @@ import { createOllama } from "../companion/ollama.js";
 import { createPersonaSource } from "../companion/persona.js";
 import { createMetadataLogger } from "./metadata-log.js";
 import { createBrokerServer } from "./server.js";
-import { createSidebarLauncher } from "./sidebar-launcher.js";
+import { createCompanionLauncher, createSidebarLauncher } from "./sidebar-launcher.js";
 import { createStateStore } from "./state-store.js";
 
 
@@ -87,6 +87,7 @@ broker = createBrokerServer({
 try {
   await broker.start();
   sidebar.open();
+  if (companion) createCompanionLauncher({ projectRoot, port }).open();
 } catch (error) {
   if (error.code === "EADDRINUSE") process.exit(0);
   throw error;

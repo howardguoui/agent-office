@@ -3,8 +3,11 @@ import { existsSync as nodeExistsSync } from "node:fs";
 import path from "node:path";
 
 
-export function createSidebarLauncher({
+/** Starts one Electron app from the plugin's own Electron, detached so it outlives the hook that started the broker. */
+export function createElectronLauncher({
   projectRoot,
+  main,
+  args = [],
   port = 4242,
   platform = process.platform,
   existsSync = nodeExistsSync,
@@ -14,12 +17,12 @@ export function createSidebarLauncher({
     platform === "win32"
       ? path.join(projectRoot, "node_modules", "electron", "dist", "electron.exe")
       : path.join(projectRoot, "node_modules", ".bin", "electron");
-  const mainPath = path.join(projectRoot, "sidebar", "electron-main.js");
+  const mainPath = path.join(projectRoot, main);
 
   return {
     open() {
       if (!existsSync(electronPath) || !existsSync(mainPath)) return false;
-      const child = spawnImpl(electronPath, [mainPath], {
+      const child = spawnImpl(electronPath, [mainPath, ...args], {
         detached: true,
         shell: false,
         stdio: "ignore",
@@ -33,3 +36,15 @@ export function createSidebarLauncher({
   };
 }
 
+export function createSidebarLauncher(options = {}) {
+  return createElectronLauncher({ ...options, main: path.join("sidebar", "electron-main.js") });
+}
+
+/** The desktop companion overlay. It holds a single-instance lock, so opening it twice is harmless. */
+export function createCompanionLauncher(options = {}) {
+  return createElectronLauncher({
+    ...options,
+    main: path.join("companion", "overlay", "electron-main.cjs"),
+    args: [`--port=${options.port ?? 4242}`],
+  });
+}
