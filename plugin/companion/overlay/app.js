@@ -61,7 +61,7 @@ const ui = {
   status: $("#status"),
 };
 
-const state = { model: null, spec: null, mood: "idle", talking: 0, typing: null, hideTimer: null, interactive: false };
+const state = { model: null, spec: null, mood: "idle", talking: 0, typing: null, hideTimer: null, interactive: null, key: null, fit: null };
 
 function setStatus(text) { ui.status.textContent = text || ""; ui.status.hidden = !text; }
 
@@ -117,6 +117,7 @@ async function loadModel(app, key) {
   fit();
   app.renderer.on("resize", fit);
   app.ticker.addOnce(fit);
+  state.fit = fit;
   app.stage.addChild(model);
 
   // Mouth moves while the bubble types (no audio), eyes droop when sleepy.
@@ -137,8 +138,28 @@ async function loadModel(app, key) {
   });
   state.model = model;
   state.spec = spec;
+  state.key = key;
   setMood(state.mood);
   return model;
+}
+
+async function switchModel(app, next) {
+  if (!MODELS[next] || next === state.key) return;
+  try { localStorage.setItem("companion-model", next); } catch { /* ignore */ }
+  const old = state.model;
+  if (state.fit) app.renderer.off("resize", state.fit);
+  state.model = null;
+  if (old) {
+    app.stage.removeChild(old);
+    old.destroy();
+  }
+  setStatus("Loading...");
+  try {
+    await loadModel(app, next);
+    setStatus("");
+  } catch (error) {
+    setStatus(`Could not load the Live2D model: ${error.message}`);
+  }
 }
 
 function openChat() {
@@ -226,6 +247,7 @@ async function main() {
     throw error;
   }
   setStatus("");
+  setInteractive(false); // sync Electron with this page's starting state
 
   // Click-through outside the character, bubble and chat (Electron only).
   window.addEventListener("pointermove", (event) => {
@@ -233,17 +255,16 @@ async function main() {
     const overModel = state.model && state.model.getBounds().contains(event.clientX, event.clientY) && state.model.hitTest(event.clientX, event.clientY).length > 0;
     setInteractive(Boolean(overUi || overModel));
   });
-  canvas.addEventListener("contextmenu", (event) => { event.preventDefault(); bridge?.showMenu({ models: Object.keys(MODELS), current: key }); });
+  canvas.addEventListener("contextmenu", (event) => { event.preventDefault(); bridge?.showMenu({ models: Object.keys(MODELS), current: state.key }); });
   ui.chat.addEventListener("submit", (event) => {
     event.preventDefault();
     const text = ui.input.value.trim();
     if (text) sendChat(text);
   });
   ui.input.addEventListener("keydown", (event) => { if (event.key === "Escape") ui.chat.hidden = true; });
-  bridge?.onSwitchModel?.((next) => {
-    try { localStorage.setItem("companion-model", next); } catch { /* ignore */ }
-    location.reload();
-  });
+  // Switch characters in place. A page reload would break Electron's forwarded mouse events,
+  // leaving the window click-through so the chat box could not be clicked or typed into.
+  bridge?.onSwitchModel?.((next) => switchModel(app, next));
 
   if (config.feed === "live") connectLive();
   else if (config.feed?.replay) playReplay(config.feed.replay);

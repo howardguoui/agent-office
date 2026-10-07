@@ -41,6 +41,8 @@ async function createWindow() {
   });
   win.setAlwaysOnTop(true, "floating");
   win.setIgnoreMouseEvents(true, { forward: true });
+  // Forwarded mouse events stop after a navigation or reload unless this is applied again.
+  win.webContents.on("did-finish-load", () => win.setIgnoreMouseEvents(true, { forward: true }));
 
   ipcMain.on("companion:interactive", (_event, on) => {
     win.setIgnoreMouseEvents(!on, { forward: true });
