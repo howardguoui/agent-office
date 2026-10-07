@@ -3,6 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { createCompanion } from "../companion/companion.js";
+import { createMemory } from "../companion/memory.js";
+import { createOllama } from "../companion/ollama.js";
+import { createPersonaSource } from "../companion/persona.js";
 import { createMetadataLogger } from "./metadata-log.js";
 import { createBrokerServer } from "./server.js";
 import { createSidebarLauncher } from "./sidebar-launcher.js";
@@ -27,10 +31,26 @@ const logger = createMetadataLogger({
 });
 const store = createStateStore({ appendLog: (event) => logger.append(event) });
 const sidebar = createSidebarLauncher({ projectRoot, port });
-const broker = createBrokerServer({
+
+// The desktop companion: on by default, COMPANION=off disables her.
+let broker;
+const companionDir = path.join(dataRoot, "companion");
+const companion =
+  process.env.COMPANION === "off"
+    ? null
+    : createCompanion({
+        llm: createOllama(),
+        memory: createMemory({ file: path.join(companionDir, "memory.json") }),
+        loadPersona: createPersonaSource({ path: path.join(companionDir, "persona.md") }),
+        emit: (message) => broker?.broadcast({ type: "companion", data: message }),
+      });
+if (companion) setInterval(() => companion.tick().catch(() => {}), 60_000).unref();
+
+broker = createBrokerServer({
   host,
   port,
   store,
+  companion,
   openSidebar: async () => sidebar.open(),
 });
 

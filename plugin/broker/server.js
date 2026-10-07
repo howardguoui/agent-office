@@ -59,14 +59,26 @@ export function createBrokerServer({
   openSidebar = async () => {},
   uiPath = DEFAULT_UI_PATH,
   maxBodyBytes = DEFAULT_MAX_BODY_BYTES,
+  companion = null,
+  onCompanionError = () => {},
 } = {}) {
   const webSockets = new WebSocketServer({ noServer: true });
 
-  function broadcastState() {
-    const payload = JSON.stringify({ type: "state", data: store.snapshot() });
+  function broadcast(message) {
+    const payload = JSON.stringify(message);
     for (const client of webSockets.clients) {
       if (client.readyState === WebSocket.OPEN) client.send(payload);
     }
+  }
+
+  function broadcastState() {
+    broadcast({ type: "state", data: store.snapshot() });
+  }
+
+  function requireJson(request, response) {
+    if (String(request.headers["content-type"] || "").startsWith("application/json")) return true;
+    sendJson(response, 415, { error: "content_type_required" });
+    return false;
   }
 
   const server = http.createServer(async (request, response) => {
@@ -81,15 +93,28 @@ export function createBrokerServer({
         return;
       }
       if (request.method === "POST" && url.pathname === "/event") {
-        if (!String(request.headers["content-type"] || "").startsWith("application/json")) {
-          sendJson(response, 415, { error: "content_type_required" });
-          return;
-        }
+        if (!requireJson(request, response)) return;
         const rawEvent = await readJsonBody(request, maxBodyBytes);
         const event = await store.apply(rawEvent);
         if (event.eventName === "SessionStart") await openSidebar();
         sendJson(response, 202, { accepted: true });
         broadcastState();
+        // The companion reacts in the background; a slow model must never delay the agent's hook.
+        if (companion) companion.observe(event).catch(onCompanionError);
+        return;
+      }
+      if (companion && request.method === "GET" && url.pathname === "/companion") {
+        sendJson(response, 200, await companion.snapshot());
+        return;
+      }
+      if (companion && request.method === "POST" && url.pathname === "/companion/chat") {
+        if (!requireJson(request, response)) return;
+        const body = await readJsonBody(request, 16 * 1024);
+        if (typeof body?.text !== "string" || !body.text.trim()) {
+          sendJson(response, 400, { error: "text_required" });
+          return;
+        }
+        sendJson(response, 200, { line: await companion.chat(body.text) });
         return;
       }
       if (request.method === "POST" && url.pathname === "/open") {
@@ -134,6 +159,7 @@ export function createBrokerServer({
   });
 
   return {
+    broadcast,
     start() {
       return new Promise((resolve, reject) => {
         const onError = (error) => reject(error);

@@ -87,3 +87,58 @@ test("rejects oversized event bodies", async () => {
     assert.equal(oversized.status, 413);
   });
 });
+
+test("passes events to the companion without waiting for it, and serves her routes", async () => {
+  const observed = [];
+  let release;
+  const companion = {
+    observe: (event) => { observed.push(event); return new Promise((resolve) => { release = resolve; }); },
+    snapshot: async () => ({ name: "Mira", mood: "focused" }),
+    chat: async (text) => ({ kind: "chat", text: `you said ${text}` }),
+  };
+  const broker = createBrokerServer({ host: "127.0.0.1", port: 0, store: createStateStore(), companion });
+  const { port } = await broker.start();
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    const accepted = await fetch(`${base}/event`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: "claude", hook_event_name: "PreToolUse", session_id: "s", tool_name: "Bash", tool_input: { command: "git push --force" } }),
+    });
+    assert.equal(accepted.status, 202); // answered while observe() is still pending
+    assert.equal(observed[0].context.program, "git push");
+    release();
+
+    assert.deepEqual(await (await fetch(`${base}/companion`)).json(), { name: "Mira", mood: "focused" });
+    const reply = await fetch(`${base}/companion/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hello" }),
+    });
+    assert.equal((await reply.json()).line.text, "you said hello");
+    const plain = await fetch(`${base}/companion/chat`, { method: "POST", headers: { "content-type": "text/plain" }, body: "hello" });
+    assert.equal(plain.status, 415); // a web page cannot post here without a CORS preflight, which is refused
+    const empty = await fetch(`${base}/companion/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    assert.equal(empty.status, 400);
+  } finally {
+    await broker.close();
+  }
+});
+
+test("broadcasts companion messages to WebSocket clients", async () => {
+  const broker = createBrokerServer({ host: "127.0.0.1", port: 0, store: createStateStore() });
+  const { port } = await broker.start();
+  try {
+    const { WebSocket } = await import("ws");
+    const client = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const messages = [];
+    await new Promise((resolve) => client.on("message", (data) => { messages.push(JSON.parse(data)); if (messages.length === 1) resolve(); }));
+    const next = new Promise((resolve) => client.on("message", (data) => resolve(JSON.parse(data))));
+    broker.broadcast({ type: "companion", data: { type: "say", text: "hi" } });
+    assert.deepEqual(await next, { type: "companion", data: { type: "say", text: "hi" } });
+    assert.equal(messages[0].type, "state");
+    client.close();
+  } finally {
+    await broker.close();
+  }
+});
