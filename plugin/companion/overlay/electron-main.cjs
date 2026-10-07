@@ -4,7 +4,8 @@ const { app, BrowserWindow, Menu, ipcMain, screen } = require("electron");
 const path = require("node:path");
 const http = require("node:http");
 
-const PORT = Number(process.env.AGENT_OFFICE_PORT || 4242);
+const portArg = process.argv.find((arg) => arg.startsWith("--port="));
+const PORT = Number(portArg ? portArg.slice("--port=".length) : process.env.AGENT_OFFICE_PORT || 4242);
 const URL = `http://127.0.0.1:${PORT}/companion/overlay`;
 const SIZE = { width: 360, height: 560 };
 
@@ -59,10 +60,18 @@ async function createWindow() {
     menu.popup({ window: win });
   });
 
-  for (let attempt = 0; attempt < 60 && !(await brokerReady()); attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 500));
+  // The broker may start after the window (or restart); keep trying instead of giving up.
+  for (;;) {
+    if (await brokerReady()) {
+      try {
+        await win.loadURL(URL);
+        break;
+      } catch {
+        // fall through and retry
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
-  await win.loadURL(URL);
   return win;
 }
 
