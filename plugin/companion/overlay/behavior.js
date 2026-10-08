@@ -74,7 +74,8 @@ function goTo(body, surface, x) {
 }
 
 /**
- * Advance the body by dt seconds. `world` = { width, height, surfaces, pointer, foregroundChanged, busy, sleepy }.
+ * Advance the body by dt seconds. `world` = { width, height, surfaces, pointer, foregroundChanged, busy, sleepy, hold }.
+ * `hold` means Howard is using one of her panels (chat, settings, a card): she stops where she is.
  * Returns events such as { type: "landed", surface } or { type: "visit", app } for the caller to react to.
  */
 export function step(body, dt, world) {
@@ -109,6 +110,7 @@ export function step(body, dt, world) {
 
   switch (body.mode) {
     case "walk": {
+      if (world.hold) { body.mode = "stay"; break; }
       const dir = Math.sign(body.targetX - body.x);
       body.facing = dir || body.facing;
       body.x += dir * Math.min(SPEED * dt, Math.abs(body.targetX - body.x));
@@ -133,7 +135,7 @@ export function step(body, dt, world) {
           body.vx = 0;
           body.vy = 0;
           body.surface = landing.id;
-          body.mode = world.busy || world.sleepy ? "stay" : "idle";
+          body.mode = world.busy || world.sleepy || world.hold ? "stay" : "idle";
           body.timer = 1.5 + body.random() * 3;
           body.jump = null;
           events.push({ type: "landed", surface: landing });
@@ -152,10 +154,10 @@ export function step(body, dt, world) {
       break;
     }
     case "stay":
-      if (!world.busy && !world.sleepy) body.mode = "idle";
+      if (!world.busy && !world.sleepy && !world.hold) body.mode = "idle";
       break;
     case "idle": {
-      if (world.busy || world.sleepy) { body.mode = "stay"; break; }
+      if (world.busy || world.sleepy || world.hold) { body.mode = "stay"; break; }
       body.timer -= dt;
       const fg = world.foregroundChanged && surfaces.find((s) => s.foreground && s.id !== "floor");
       if (fg) {

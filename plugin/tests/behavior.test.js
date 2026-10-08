@@ -91,3 +91,19 @@ test("stays put while an agent is working or she is sleepy", () => {
   step(body, 1 / 60, { ...world, surfaces });
   assert.equal(body.mode, "idle");
 });
+
+test("she stops and stays put while one of her panels is open, then carries on", () => {
+  const world = { width: 1000, height: 800, surfaces: [{ id: "floor", x1: 0, x2: 1000, y: 800, app: "" }], pointer: { x: 0, y: 0 } };
+  const body = createBody(world, { x: 500, random: () => 0.5 });
+  body.mode = "walk";
+  body.targetX = 900;
+  step(body, 0.1, world);
+  const x = body.x;
+  assert.ok(x > 500);
+  step(body, 0.1, { ...world, hold: true });
+  assert.equal(body.mode, "stay");
+  for (let i = 0; i < 50; i += 1) step(body, 0.1, { ...world, hold: true, foregroundChanged: true });
+  assert.equal(body.x, x);
+  step(body, 0.1, world);
+  assert.equal(body.mode, "idle");
+});

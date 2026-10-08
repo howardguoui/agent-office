@@ -4,6 +4,7 @@
 // window.COMPANION_CONFIG = { vendor: { pixi, unsafeEval, live2d }, core, feed: "live" | { replay: url }, chatUrl }
 
 import { createBody, drop, startDrag, step, surfacesFrom } from "./behavior.js";
+import { approach, stepIndex, walkPose } from "./gait.js";
 
 const MODEL_BASE = "https://cdn.jsdelivr.net/gh/Live2D/CubismWebSamples@5-r.5/Samples/Resources";
 
@@ -80,6 +81,7 @@ const state = {
   activity: null, // null | "thinking" | "working" while an agent runs a message from her chat box
   settings: null, traits: [], codexModels: [], approvalId: null, answerSide: 1,
   raised: null, // whether her window is above other apps (a panel is open); null until first synced
+  gait: { t: 0, amount: 0, pose: null, step: 0, squash: 0 }, // walk cycle and landing squash
 };
 
 function setStatus(text) { ui.status.textContent = text || ""; ui.status.hidden = !text; }
@@ -131,10 +133,20 @@ async function loadModel(app, key) {
     const now = performance.now();
     const mode = state.body?.mode;
     if (state.talking) core.setParameterValueById(spec.mouth, 0.25 + Math.abs(Math.sin(now / 85)) * 0.6);
-    if (mode === "walk") {
-      core.setParameterValueById("ParamBodyAngleX", 6 * Math.sin(now / 160));
-      core.setParameterValueById("ParamAngleZ", 4 * Math.sin(now / 160));
-    } else if (mode === "jump" || mode === "fall") {
+    const pose = state.gait.pose;
+    if (pose && state.gait.amount > 0.01) {
+      // Walk cycle layered on the idle motion (see gait.js). Ids a model lacks are ignored.
+      core.addParameterValueById("ParamBodyAngleZ", pose.bodyAngleZ);
+      core.addParameterValueById("ParamBodyAngleX", pose.bodyAngleX);
+      core.addParameterValueById("ParamAngleZ", pose.headAngleZ);
+      for (const id of ["ParamRobeL", "ParamSkirt"]) core.addParameterValueById(id, pose.robeL);
+      core.addParameterValueById("ParamRobeR", pose.robeR);
+      for (const id of ["ParamArmLA01", "ParamArmLA", "ParamArmL"]) core.addParameterValueById(id, pose.armL);
+      for (const id of ["ParamArmRA01", "ParamArmRA", "ParamArmR"]) core.addParameterValueById(id, pose.armR);
+      core.addParameterValueById("ParamLeftShoulderUp", pose.shoulderL);
+      core.addParameterValueById("ParamRightShoulderUp", pose.shoulderR);
+    }
+    if (mode === "jump" || mode === "fall") {
       core.setParameterValueById("ParamAngleY", -12);
     } else if (mode === "drag") {
       core.setParameterValueById("ParamAngleZ", 14 * Math.sin(now / 220));
@@ -261,6 +273,7 @@ function tick() {
     foregroundChanged: state.foregroundChanged,
     busy: state.busy,
     sleepy: state.mood === "sleepy",
+    hold: panelOpen(),
   });
   state.foregroundChanged = false;
   for (const event of events) {
@@ -268,15 +281,66 @@ function tick() {
       state.lastVisitAt = performance.now();
       noticeApp(event.app);
     }
-    if (event.type === "landed" && Math.random() < 0.3) model.motion(state.spec.tap);
+    if (event.type === "landed") {
+      state.gait.squash = 0.12; // land with a little squash
+      puff(body.x, body.y, 6);
+      if (Math.random() < 0.3) model.motion(state.spec.tap);
+    }
   }
+  // Walk cycle: hop, waddle and squash, faded in and out so she never snaps (gait.js).
+  const gait = state.gait;
+  const walking = body.mode === "walk";
+  gait.amount = approach(gait.amount, walking ? 1 : 0, 5, dt);
+  if (walking) {
+    gait.t += dt;
+    const index = stepIndex(gait.t);
+    if (index !== gait.step) { gait.step = index; puff(body.x - body.facing * 12, body.y, 2); }
+  } else if (gait.amount === 0) {
+    gait.t = 0;
+    gait.step = 0;
+  }
+  gait.pose = walkPose(gait.t, gait.amount);
+  gait.squash = approach(gait.squash, 0, 0.6, dt);
+  const squash = gait.pose.squash + gait.squash;
   const scale = HEIGHT / model.internalModel.originalHeight;
-  const bob = body.mode === "walk" ? -Math.abs(Math.sin(performance.now() / 160)) * 6 : 0;
-  model.scale.set(scale * (body.facing > 0 ? -1 : 1), scale);
+  model.scale.set(scale * (1 + squash * 0.6) * (body.facing > 0 ? -1 : 1), scale * (1 - squash));
+  model.rotation = (gait.pose.rotation * Math.PI) / 180;
   model.x = body.x;
-  model.y = body.y + bob;
+  model.y = body.y - gait.pose.lift;
+  updatePuffs(dt);
   layoutUi();
   syncRaised();
+}
+
+// Any of her panels open, or Howard is holding her: she stands still so the panel does not run off.
+function panelOpen() {
+  return !ui.chat.hidden || !ui.settings.hidden || !ui.approval.hidden || !ui.answer.hidden || Boolean(state.press);
+}
+
+// Little dust puffs at her feet on each step and on landing.
+const puffs = [];
+function puff(x, y, count) {
+  const PIXI = window.PIXI;
+  if (!PIXI || !state.app) return;
+  for (let i = 0; i < count; i += 1) {
+    const dot = new PIXI.Graphics();
+    dot.beginFill(0xffffff, 0.55).drawCircle(0, 0, 3 + Math.random() * 3).endFill();
+    dot.x = x + (Math.random() - 0.5) * 24;
+    dot.y = y - 2;
+    state.app.stage.addChildAt(dot, 0);
+    puffs.push({ dot, vx: (Math.random() - 0.5) * 50, vy: -20 - Math.random() * 30, life: 0.5 });
+  }
+}
+function updatePuffs(dt) {
+  for (let i = puffs.length - 1; i >= 0; i -= 1) {
+    const p = puffs[i];
+    p.life -= dt;
+    p.dot.x += p.vx * dt;
+    p.dot.y += p.vy * dt;
+    p.dot.alpha = Math.max(0, p.life / 0.5) * 0.8;
+    p.dot.scale.set(1 + (0.5 - p.life) * 1.5);
+    if (p.life <= 0) { p.dot.destroy(); puffs.splice(i, 1); }
+  }
 }
 
 // Her window lives on the desktop layer, under other apps. It comes forward only while Howard is using one of

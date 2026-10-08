@@ -11,7 +11,7 @@ const DEFAULT_MAX_BODY_BYTES = 128 * 1024;
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_UI_PATH = path.join(PROJECT_ROOT, "sidebar", "index.html");
 const OVERLAY_DIR = path.join(PROJECT_ROOT, "companion", "overlay");
-const OVERLAY_SCRIPTS = new Set(["/companion/app.js", "/companion/behavior.js"]);
+const OVERLAY_SCRIPTS = new Set(["/companion/app.js", "/companion/behavior.js", "/companion/gait.js"]);
 // The only files the overlay may load from node_modules.
 const VENDOR_FILES = {
   "/companion/vendor/pixi.min.js": path.join(PROJECT_ROOT, "node_modules", "pixi.js", "dist", "pixi.min.js"),

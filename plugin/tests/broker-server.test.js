@@ -160,6 +160,7 @@ test("serves the companion overlay, its script and only the vendored libraries",
     assert.match(await page.text(), /<canvas id="stage">/);
     assert.match(await (await fetch(`${base}/companion/app.js`)).text(), /Live2DModel\.from/);
     assert.match(await (await fetch(`${base}/companion/behavior.js`)).text(), /export function step/);
+    assert.match(await (await fetch(`${base}/companion/gait.js`)).text(), /export function walkPose/);
     assert.equal((await fetch(`${base}/companion/server.js`)).status, 404);
     for (const [file, minBytes] of [["pixi.min.js", 100_000], ["unsafe-eval.min.js", 1_000], ["cubism4.min.js", 100_000]]) {
       const lib = await fetch(`${base}/companion/vendor/${file}`);
