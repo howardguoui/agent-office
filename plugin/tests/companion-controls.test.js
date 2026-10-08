@@ -28,6 +28,10 @@ test("settings validate choices, check the project folder exists and keep recent
   assert.match(errors[0], /Pick a project folder/);
   ({ value } = await validateSettings({ persona: { name: "  Hana  ", traits: ["shy", "nope", "nerdy"], notes: "Loves cats." } }, current, { statImpl }));
   assert.deepEqual(value.persona, { name: "Hana", traits: ["shy", "nerdy"], notes: "Loves cats." });
+  // Walking around is opt-in: by default she stays where Howard puts her.
+  assert.equal(DEFAULTS.roam, false);
+  ({ value } = await validateSettings({ roam: 1 }, current, { statImpl }));
+  assert.equal(value.roam, true);
 });
 
 test("the persona is built from name, traits and notes", () => {

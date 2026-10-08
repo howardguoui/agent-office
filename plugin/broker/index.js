@@ -88,7 +88,8 @@ broker = createBrokerServer({
 
 try {
   await broker.start();
-  if (companion) companionWindow.open();
+  // COMPANION_WINDOW=off when the companion window started this broker itself (desktop shortcut).
+  if (companion && process.env.COMPANION_WINDOW !== "off") companionWindow.open();
 } catch (error) {
   if (error.code === "EADDRINUSE") process.exit(0);
   throw error;
@@ -99,6 +100,20 @@ async function shutdown() {
   if (closing) return;
   closing = true;
   await broker.close();
+}
+
+// Started by the companion window: exit when it does.
+const parentPid = Number.parseInt(process.env.AGENT_OFFICE_PARENT_PID || "", 10);
+if (Number.isInteger(parentPid) && parentPid > 0) {
+  setInterval(async () => {
+    try {
+      process.kill(parentPid, 0);
+    } catch (error) {
+      if (error.code === "EPERM") return; // alive, just not ours to signal
+      await shutdown();
+      process.exit(0);
+    }
+  }, 3000).unref();
 }
 
 process.once("SIGINT", shutdown);

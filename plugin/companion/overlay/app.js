@@ -274,7 +274,7 @@ function tick() {
     foregroundChanged: state.foregroundChanged,
     busy: state.busy,
     sleepy: state.mood === "sleepy",
-    hold: panelOpen(),
+    hold: panelOpen() || state.settings?.roam !== true, // roaming is opt-in (settings)
   });
   state.foregroundChanged = false;
   for (const event of events) {
@@ -285,6 +285,8 @@ function tick() {
     if (event.type === "landed") {
       state.gait.squash = 0.12; // land with a little squash
       puff(body.x, body.y, 6);
+      // Remember where she rests on the floor, so she is still there next time.
+      if (event.surface.id === "floor") { try { localStorage.setItem("companion-x", String(Math.round(body.x / world().width * 1000))); } catch { /* ignore */ } }
       if (Math.random() < 0.3) model.motion(state.spec.tap);
     }
   }
@@ -311,6 +313,15 @@ function tick() {
   updatePuffs(dt);
   layoutUi();
   syncRaised();
+}
+
+// Where she last rested on the floor (stored as thousandths of the screen width), if anywhere.
+function savedSpot() {
+  try {
+    const stored = Number.parseInt(localStorage.getItem("companion-x") || "", 10);
+    if (Number.isFinite(stored) && stored > 0 && stored < 1000) return { x: (stored / 1000) * world().width };
+  } catch { /* ignore */ }
+  return {};
 }
 
 // Any of her panels open, or Howard is holding her: she stands still so the panel does not run off.
@@ -495,6 +506,7 @@ function fillSettingsForm() {
   $("#set-name").value = s.persona?.name || "";
   $("#set-notes").value = s.persona?.notes || "";
   $("#set-apps").checked = s.commentOnApps !== false;
+  $("#set-roam").checked = s.roam === true;
   $("#set-traits").innerHTML = state.traits.map((trait) => `<button type="button" data-trait="${trait}" aria-pressed="${(s.persona?.traits || []).includes(trait)}">${trait}</button>`).join("");
   showAgentFields(s.target);
 }
@@ -523,6 +535,7 @@ async function saveSettings() {
     codexSandbox: $("#set-codex-sandbox").value,
     character: $("#set-character").value,
     commentOnApps: $("#set-apps").checked,
+    roam: $("#set-roam").checked,
     persona: { name: $("#set-name").value, traits, notes: $("#set-notes").value },
   };
   const result = await postJson("/companion/settings", patch, "PUT");
@@ -713,7 +726,7 @@ async function main() {
     throw error;
   }
   setStatus("");
-  state.body = createBody(world());
+  state.body = createBody(world(), savedSpot());
   updateSurfaces();
   app.renderer.on("resize", updateSurfaces);
   app.ticker.add(tick);

@@ -6,6 +6,7 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, screen } = require("electron");
 const path = require("node:path");
 const http = require("node:http");
+const { spawn } = require("node:child_process");
 const { createWindowWatcher, busyDisplays, pickHost } = require("./desktop-windows.cjs");
 
 const portArg = process.argv.find((arg) => arg.startsWith("--port="));
@@ -22,6 +23,25 @@ function brokerReady() {
 }
 
 let hiddenByUser = false;
+
+// Started from the desktop shortcut (--start-broker): run the broker ourselves, without a console window. It
+// watches our process id and exits when the companion quits. System Node runs it (AGENT_OFFICE_NODE overrides).
+let brokerStarted = false;
+function startBroker() {
+  if (brokerStarted || !process.argv.includes("--start-broker")) return;
+  brokerStarted = true;
+  const script = path.join(__dirname, "..", "..", "broker", "index.js");
+  const child = spawn(process.env.AGENT_OFFICE_NODE || "node", [script], {
+    cwd: path.join(__dirname, "..", ".."),
+    detached: true,
+    shell: false,
+    stdio: "ignore",
+    windowsHide: true,
+    env: { ...process.env, AGENT_OFFICE_PORT: String(PORT), COMPANION_WINDOW: "off", AGENT_OFFICE_PARENT_PID: String(process.pid) },
+  });
+  child.on("error", () => { brokerStarted = false; });
+  child.unref();
+}
 
 /** The native handle as a decimal string, for the window lister's "bottom" command. */
 function handleOf(win) {
@@ -89,6 +109,7 @@ async function createWindow() {
 
   // The broker may start after the window (or restart); keep trying instead of giving up.
   for (;;) {
+    if (!(await brokerReady())) startBroker();
     if (await brokerReady()) {
       try {
         await win.loadURL(URL);

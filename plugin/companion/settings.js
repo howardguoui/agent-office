@@ -25,6 +25,7 @@ export const DEFAULTS = Object.freeze({
   codexSandbox: "read-only", // read-only | workspace-write
   character: "mao",
   commentOnApps: true,
+  roam: false, // walk around the desktop; off = she stays where you put her (drag to move her)
   persona: { name: "Mira", traits: ["cheerful", "teasing"], notes: "" },
 });
 
@@ -90,6 +91,7 @@ export async function validateSettings(patch, current, { statImpl = stat } = {})
     else errors.push("codexModel looks invalid");
   }
   if (patch.commentOnApps !== undefined) next.commentOnApps = Boolean(patch.commentOnApps);
+  if (patch.roam !== undefined) next.roam = Boolean(patch.roam);
   if (patch.persona) {
     const { name, traits, notes } = patch.persona;
     if (name !== undefined) {
