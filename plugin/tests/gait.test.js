@@ -7,9 +7,11 @@ test("each step is a hop that lands with a squash, and the waddle alternates sid
   const stepTime = 1 / STEPS_PER_SECOND;
   const landing = walkPose(stepTime); // a footfall
   const midStep = walkPose(stepTime * 1.5);
-  assert.ok(landing.lift < 0.01 && landing.squash > 0.04);
-  assert.ok(midStep.lift > 11 && midStep.squash === 0);
-  assert.ok(walkPose(stepTime * 0.5).rotation > 0 && walkPose(stepTime * 1.5).rotation < 0);
+  assert.ok(landing.lift < 0.01 && landing.squash > 0.06);
+  assert.ok(midStep.lift > 17 && midStep.squash < 0); // stretched in the air
+  // Leans into the walk, waddling either side of the lean.
+  assert.ok(walkPose(stepTime * 0.5).rotation > walkPose(stepTime * 1.5).rotation);
+  assert.ok(walkPose(stepTime * 1.5, 1, 1).rotation > 0 && walkPose(stepTime * 0.5, 1, -1).rotation < 0);
   // Arms swing against the robe (the legs underneath).
   const pose = walkPose(stepTime * 0.5);
   assert.ok(pose.robeL > 0 && pose.armL < 0 && pose.armR > 0);

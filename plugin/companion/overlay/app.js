@@ -139,6 +139,7 @@ async function loadModel(app, key) {
       core.addParameterValueById("ParamBodyAngleZ", pose.bodyAngleZ);
       core.addParameterValueById("ParamBodyAngleX", pose.bodyAngleX);
       core.addParameterValueById("ParamAngleZ", pose.headAngleZ);
+      core.addParameterValueById("ParamAngleY", pose.headAngleY);
       for (const id of ["ParamRobeL", "ParamSkirt"]) core.addParameterValueById(id, pose.robeL);
       core.addParameterValueById("ParamRobeR", pose.robeR);
       for (const id of ["ParamArmLA01", "ParamArmLA", "ParamArmL"]) core.addParameterValueById(id, pose.armL);
@@ -299,7 +300,7 @@ function tick() {
     gait.t = 0;
     gait.step = 0;
   }
-  gait.pose = walkPose(gait.t, gait.amount);
+  gait.pose = walkPose(gait.t, gait.amount, body.facing);
   gait.squash = approach(gait.squash, 0, 0.6, dt);
   const squash = gait.pose.squash + gait.squash;
   const scale = HEIGHT / model.internalModel.originalHeight;
