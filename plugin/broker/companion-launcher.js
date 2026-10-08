@@ -36,10 +36,6 @@ export function createElectronLauncher({
   };
 }
 
-export function createSidebarLauncher(options = {}) {
-  return createElectronLauncher({ ...options, main: path.join("sidebar", "electron-main.js") });
-}
-
 /** The desktop companion overlay. It holds a single-instance lock, so opening it twice is harmless. */
 export function createCompanionLauncher(options = {}) {
   return createElectronLauncher({

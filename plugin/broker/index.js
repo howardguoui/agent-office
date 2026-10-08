@@ -12,7 +12,7 @@ import { createOllama } from "../companion/ollama.js";
 import { createPersonaSource } from "../companion/persona.js";
 import { createMetadataLogger } from "./metadata-log.js";
 import { createBrokerServer } from "./server.js";
-import { createCompanionLauncher, createSidebarLauncher } from "./sidebar-launcher.js";
+import { createCompanionLauncher } from "./companion-launcher.js";
 import { createStateStore } from "./state-store.js";
 
 
@@ -33,7 +33,6 @@ const logger = createMetadataLogger({
   directory: path.join(dataRoot, "logs", "events"),
 });
 const store = createStateStore({ appendLog: (event) => logger.append(event) });
-const sidebar = createSidebarLauncher({ projectRoot, port });
 
 // The desktop companion: on by default, COMPANION=off disables her.
 let broker;
@@ -75,19 +74,21 @@ const runner = createAgentRunner({
 });
 const controls = companion ? { settings, runner, approvals, codexModels, traits: Object.keys(TRAITS) } : null;
 
+const companionWindow = createCompanionLauncher({ projectRoot, port });
+
 broker = createBrokerServer({
   host,
   port,
   store,
   companion,
   controls,
-  openSidebar: async () => sidebar.open(),
+  // The old Agent Office sidebar is gone; a new agent session (or /open) brings the companion back if she was quit.
+  openSidebar: async () => { if (companion) companionWindow.open(); },
 });
 
 try {
   await broker.start();
-  sidebar.open();
-  if (companion) createCompanionLauncher({ projectRoot, port }).open();
+  if (companion) companionWindow.open();
 } catch (error) {
   if (error.code === "EADDRINUSE") process.exit(0);
   throw error;

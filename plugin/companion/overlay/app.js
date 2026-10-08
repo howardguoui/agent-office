@@ -79,6 +79,7 @@ const state = {
   lastVisitAt: 0, pointer: { x: 0, y: 0, vx: 0, t: 0 }, press: null, busy: false,
   activity: null, // null | "thinking" | "working" while an agent runs a message from her chat box
   settings: null, traits: [], codexModels: [], approvalId: null, answerSide: 1,
+  raised: null, // whether her window is above other apps (a panel is open); null until first synced
 };
 
 function setStatus(text) { ui.status.textContent = text || ""; ui.status.hidden = !text; }
@@ -275,6 +276,24 @@ function tick() {
   model.x = body.x;
   model.y = body.y + bob;
   layoutUi();
+  syncRaised();
+}
+
+// Her window lives on the desktop layer, under other apps. It comes forward only while Howard is using one of
+// her panels or an agent is waiting for his approval, and goes back as soon as they close.
+function syncRaised() {
+  const raised = !ui.chat.hidden || !ui.settings.hidden || !ui.approval.hidden || !ui.answer.hidden;
+  if (raised === state.raised) return;
+  state.raised = raised;
+  bridge?.setRaised?.(raised);
+}
+
+function onDisplayChanged() {
+  // New monitor: start again on its floor, away from the edges.
+  state.windows = [];
+  state.foregroundId = null;
+  state.body = createBody(world(), { x: Math.round(world().width * 0.7) });
+  updateSurfaces();
 }
 
 function noticeApp(app) {
@@ -646,6 +665,7 @@ async function main() {
   // Switch characters in place: a page reload would break Electron's forwarded mouse events.
   bridge?.onSwitchModel?.((next) => switchModel(next));
   bridge?.onWindows?.(onWindows);
+  bridge?.onDisplay?.(() => setTimeout(onDisplayChanged, 50)); // after the window has resized
 
   if (config.feed === "live") connectLive();
   else if (config.feed?.replay) playReplay(config.feed.replay);

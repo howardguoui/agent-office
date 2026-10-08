@@ -1,10 +1,12 @@
-// Desktop companion window: a transparent layer over the whole work area of the main screen, always on top
-// and click-through except over the character, her bubble and the chat box. She walks on the taskbar and on
-// top of other windows, which a small watcher lists (frames and app names only).
+// Desktop companion window: a transparent, click-through layer over the work area of one screen. It sits on
+// the desktop layer, under every app window, and only comes forward while Howard is talking to her or an agent
+// is waiting for his approval. She walks along the bottom of the screen and on top of windows, which a small
+// watcher lists (frames and app names only). When a fullscreen game or video takes her screen she moves to
+// another monitor; if every screen is busy she hides until one is free.
 const { app, BrowserWindow, Menu, dialog, ipcMain, screen } = require("electron");
 const path = require("node:path");
 const http = require("node:http");
-const { createWindowWatcher } = require("./desktop-windows.cjs");
+const { createWindowWatcher, busyDisplays, pickHost } = require("./desktop-windows.cjs");
 
 const portArg = process.argv.find((arg) => arg.startsWith("--port="));
 const PORT = Number(portArg ? portArg.slice("--port=".length) : process.env.AGENT_OFFICE_PORT || 4242);
@@ -21,18 +23,24 @@ function brokerReady() {
 
 let hiddenByUser = false;
 
+/** The native handle as a decimal string, for the window lister's "bottom" command. */
+function handleOf(win) {
+  const buffer = win.getNativeWindowHandle();
+  return buffer.length >= 8 ? buffer.readBigUInt64LE(0).toString() : String(buffer.readUInt32LE(0));
+}
+
 async function createWindow() {
-  const display = screen.getPrimaryDisplay();
-  const { workArea } = display;
+  let hostId = screen.getPrimaryDisplay().id;
+  const host = () => screen.getAllDisplays().find((d) => d.id === hostId) || screen.getPrimaryDisplay();
   const win = new BrowserWindow({
-    ...workArea,
+    ...host().workArea,
     transparent: true,
     frame: false,
     resizable: false,
     movable: false,
     hasShadow: false,
     skipTaskbar: true,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     focusable: true,
     title: "Agent Office Companion",
     backgroundColor: "#00000000",
@@ -43,8 +51,17 @@ async function createWindow() {
       sandbox: true,
     },
   });
-  win.setAlwaysOnTop(true, "floating");
   win.setIgnoreMouseEvents(true, { forward: true });
+  let raised = false; // true while a chat, card or settings panel is open
+  let watcher = null;
+  const sendToBack = () => { if (!raised && !win.isDestroyed()) watcher?.bottom(handleOf(win)); };
+  ipcMain.on("companion:raise", (_event, on) => {
+    raised = Boolean(on);
+    if (win.isDestroyed()) return;
+    if (raised) { win.setAlwaysOnTop(true, "floating"); win.moveTop(); }
+    else { win.setAlwaysOnTop(false); sendToBack(); }
+  });
+  win.on("blur", sendToBack);
   // Forwarded mouse events stop after a navigation or reload unless this is applied again.
   win.webContents.on("did-finish-load", () => win.setIgnoreMouseEvents(true, { forward: true }));
 
@@ -82,25 +99,40 @@ async function createWindow() {
     }
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
-  const watcher = createWindowWatcher({
+  const moveTo = (id) => {
+    hostId = id;
+    win.setBounds(host().workArea);
+    win.webContents.send("companion:display", { id });
+  };
+  watcher = createWindowWatcher({
     getGeometry: () => {
-      const primary = screen.getPrimaryDisplay();
-      return { workArea: primary.workArea, displayBounds: primary.bounds, scaleFactor: primary.scaleFactor };
+      const display = host();
+      return { workArea: display.workArea, displayBounds: display.bounds, scaleFactor: display.scaleFactor };
     },
-    // Game mode: hide while a fullscreen app (game, video) is in front, come back afterwards.
-    onFullscreen: (fullscreen) => {
+    // Game mode: a fullscreen game or video on her screen sends her to another monitor, or hides her if
+    // every screen is busy. She stays where she is once the game ends, so she does not jump around.
+    onList: (raw) => {
       if (win.isDestroyed() || hiddenByUser) return;
-      if (fullscreen && win.isVisible()) win.hide();
-      else if (!fullscreen && !win.isVisible()) win.showInactive();
+      const displays = screen.getAllDisplays();
+      const next = pickHost(displays, busyDisplays(raw, displays, { ownPid: process.pid }), hostId, screen.getPrimaryDisplay().id);
+      if (next === null) { if (win.isVisible()) win.hide(); return; }
+      if (next !== hostId) moveTo(next);
+      if (!win.isVisible()) win.showInactive();
+      sendToBack();
     },
     onWindows: (windows) => {
       if (!win.isDestroyed()) win.webContents.send("companion:windows", windows);
     },
   });
   win.on("closed", () => watcher.stop());
-  screen.on("display-metrics-changed", () => {
-    if (!win.isDestroyed()) win.setBounds(screen.getPrimaryDisplay().workArea);
-  });
+  const refit = () => {
+    if (win.isDestroyed()) return;
+    if (!screen.getAllDisplays().some((d) => d.id === hostId)) moveTo(screen.getPrimaryDisplay().id);
+    else win.setBounds(host().workArea);
+  };
+  screen.on("display-metrics-changed", refit);
+  screen.on("display-removed", refit);
+  sendToBack();
   return win;
 }
 

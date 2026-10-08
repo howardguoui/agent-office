@@ -22,7 +22,11 @@ public static class CompanionWindows {
   [DllImport("user32.dll")] static extern IntPtr SetProcessDpiAwarenessContext(IntPtr value);
   [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hWnd, int attr, out RECT value, int size);
   [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hWnd, int attr, out int value, int size);
+  [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
   public static void Init() { SetProcessDpiAwarenessContext(new IntPtr(-4)); }
+  // Desktop layer: put the companion's window under every other app window (HWND_BOTTOM), without moving,
+  // resizing or activating it. Explorer keeps the wallpaper below it, so she stays visible on the desktop.
+  public static void Bottom(long h) { SetWindowPos(new IntPtr(h), new IntPtr(1), 0, 0, 0, 0, 0x0013); }
   public static List<long[]> List() {
     var result = new List<long[]>();
     IntPtr fg = GetForegroundWindow();
@@ -43,6 +47,7 @@ public static class CompanionWindows {
 [CompanionWindows]::Init()
 $names = @{}
 while (($line = [Console]::In.ReadLine()) -ne $null) {
+  if ($line.StartsWith('bottom ')) { [CompanionWindows]::Bottom([long]$line.Substring(7)); continue }
   $items = foreach ($w in [CompanionWindows]::List()) {
     $procId = [int]$w[1]
     if (-not $names.ContainsKey($procId)) { $names[$procId] = (Get-Process -Id $procId).ProcessName }
@@ -53,15 +58,38 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
 }
 `;
 
+/** A display's bounds in physical pixels (window frames come from the lister in physical pixels). */
+function physical(display) {
+  const { bounds, scaleFactor = 1 } = display;
+  return { x: bounds.x * scaleFactor, y: bounds.y * scaleFactor, w: bounds.width * scaleFactor, h: bounds.height * scaleFactor };
+}
+
 /**
- * True when the window in front covers the whole display (a game, a fullscreen video or presentation):
- * the companion should get out of the way. Works on physical-pixel frames.
+ * Ids of the displays where the top-most window covers the whole screen: a game, a fullscreen video or a
+ * presentation. Uses z-order, not focus, so clicking a window on the other monitor does not bring her back
+ * over the game. Explorer (the wallpaper and desktop) never counts.
  */
+function busyDisplays(windows, displays, { ownPid } = {}) {
+  const busy = new Set();
+  for (const display of displays) {
+    const b = physical(display);
+    const top = windows.find((w) => w.pid !== ownPid && !w.minimized && w.app.toLowerCase() !== "explorer"
+      && w.x < b.x + b.w && w.x + w.w > b.x && w.y < b.y + b.h && w.y + w.h > b.y);
+    if (top && top.x <= b.x + 2 && top.y <= b.y + 2 && top.x + top.w >= b.x + b.w - 2 && top.y + top.h >= b.y + b.h - 2) busy.add(display.id);
+  }
+  return busy;
+}
+
+/** Which display she should live on: stay where she is unless a fullscreen app took it; null when every screen is busy. */
+function pickHost(displays, busy, currentId, primaryId) {
+  if (displays.some((d) => d.id === currentId) && !busy.has(currentId)) return currentId;
+  const free = displays.filter((d) => !busy.has(d.id)).sort((a, b) => (b.id === primaryId) - (a.id === primaryId));
+  return free.length ? free[0].id : null;
+}
+
+/** Kept for the single-screen case: true when the given display is covered by a fullscreen app. */
 function fullscreenInFront(windows, { displayBounds, scaleFactor, ownPid }) {
-  const fg = windows.find((w) => w.foreground && w.pid !== ownPid && !w.minimized);
-  if (!fg) return false;
-  const b = { x: displayBounds.x * scaleFactor, y: displayBounds.y * scaleFactor, w: displayBounds.width * scaleFactor, h: displayBounds.height * scaleFactor };
-  return fg.x <= b.x + 2 && fg.y <= b.y + 2 && fg.x + fg.w >= b.x + b.w - 2 && fg.y + fg.h >= b.y + b.h - 2;
+  return busyDisplays(windows, [{ id: 0, bounds: displayBounds, scaleFactor }], { ownPid }).has(0);
 }
 
 /** Convert physical-pixel window frames to the overlay's CSS pixels, relative to the work area. */
@@ -78,8 +106,12 @@ function toOverlay(windows, { workArea, scaleFactor, ownPid }) {
     .filter((w) => w.x + w.w > 0 && w.x < workArea.width && w.y + w.h > 0 && w.y < workArea.height);
 }
 
-function createWindowWatcher({ intervalMs = 1500, onWindows, onFullscreen = () => {}, getGeometry, ownPid = process.pid, spawnImpl = spawn } = {}) {
-  if (process.platform !== "win32" && spawnImpl === spawn) return { stop() {} };
+/**
+ * Polls the window list. onList(raw) gets physical frames (top-most first) so the caller can pick a display;
+ * then onWindows gets them converted to the overlay of the display getGeometry() describes.
+ */
+function createWindowWatcher({ intervalMs = 1500, onList = () => {}, onWindows, getGeometry, ownPid = process.pid, spawnImpl = spawn } = {}) {
+  if (process.platform !== "win32" && spawnImpl === spawn) return { stop() {}, bottom() {} };
   const encoded = Buffer.from(SCRIPT, "utf16le").toString("base64");
   const child = spawnImpl("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded], {
     stdio: ["pipe", "pipe", "ignore"],
@@ -97,9 +129,8 @@ function createWindowWatcher({ intervalMs = 1500, onWindows, onFullscreen = () =
       if (!line.startsWith("[")) continue;
       try {
         const raw = JSON.parse(line);
-        const geometry = { ...getGeometry(), ownPid };
-        onFullscreen(fullscreenInFront(raw, geometry));
-        onWindows(toOverlay(raw, geometry));
+        onList(raw);
+        onWindows(toOverlay(raw, { ...getGeometry(), ownPid }));
       } catch {
         // ignore a malformed line; the next poll will try again
       }
@@ -112,6 +143,10 @@ function createWindowWatcher({ intervalMs = 1500, onWindows, onFullscreen = () =
   }, intervalMs);
   child.on("exit", () => clearInterval(timer));
   return {
+    /** Send a window (by native handle) under all other app windows. */
+    bottom(hwnd) {
+      if (child.stdin.writable && /^\d+$/.test(String(hwnd))) child.stdin.write(`bottom ${hwnd}\n`);
+    },
     stop() {
       clearInterval(timer);
       try { child.kill(); } catch { /* already gone */ }
@@ -119,4 +154,4 @@ function createWindowWatcher({ intervalMs = 1500, onWindows, onFullscreen = () =
   };
 }
 
-module.exports = { createWindowWatcher, toOverlay, fullscreenInFront, SCRIPT };
+module.exports = { createWindowWatcher, toOverlay, fullscreenInFront, busyDisplays, pickHost, SCRIPT };
