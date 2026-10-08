@@ -2,7 +2,7 @@
 // the desktop layer, under every app window, and only comes forward while Howard is talking to her or an agent
 // is waiting for his approval. She walks along the bottom of the screen and on top of windows, which a small
 // watcher lists (frames and app names only). When a fullscreen game or video takes her screen she moves to
-// another monitor; if every screen is busy she hides until one is free.
+// another monitor and comes back afterwards; if every screen is busy she hides until one is free.
 const { app, BrowserWindow, Menu, dialog, ipcMain, screen } = require("electron");
 const path = require("node:path");
 const http = require("node:http");
@@ -110,7 +110,7 @@ async function createWindow() {
       return { workArea: display.workArea, displayBounds: display.bounds, scaleFactor: display.scaleFactor };
     },
     // Game mode: a fullscreen game or video on her screen sends her to another monitor, or hides her if
-    // every screen is busy. She stays where she is once the game ends, so she does not jump around.
+    // every screen is busy. She comes back to the main screen once the game ends.
     onList: (raw) => {
       if (win.isDestroyed() || hiddenByUser) return;
       const displays = screen.getAllDisplays();

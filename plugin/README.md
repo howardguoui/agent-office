@@ -22,7 +22,7 @@ if she was quit.
 - **Roams.** She walks along the bottom of the screen, hops onto the tops of windows, rides a window you move,
   and drops when it closes. Drag and throw her with the mouse.
 - **Game mode.** When a fullscreen game or video is on top of her monitor she moves to another monitor; if
-  every screen is busy she hides until one is free.
+  every screen is busy she hides until one is free. She returns to the main monitor when the game ends.
 - **Privacy.** The window lister reads frames and process names only, never window titles or contents.
 
 ## Run

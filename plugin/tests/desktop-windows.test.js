@@ -50,14 +50,14 @@ test("a fullscreen game on the top of the z-order makes its monitor busy, even w
   assert.deepEqual([...busyDisplays([{ ...game, pid: 99 }], [LEFT], { ownPid: 99 })], []);
 });
 
-test("she moves to a free monitor when hers gets a game, stays put afterwards, and hides when every screen is busy", () => {
+test("she moves to a free monitor when hers gets a game, comes home afterwards, and hides when every screen is busy", () => {
   const displays = [LEFT, RIGHT];
   assert.equal(pickHost(displays, new Set(), 1, 1), 1);
   assert.equal(pickHost(displays, new Set([1]), 1, 1), 2);
-  assert.equal(pickHost(displays, new Set(), 2, 1), 2); // game over: no jumping back
-  assert.equal(pickHost(displays, new Set([2]), 2, 1), 1);
+  assert.equal(pickHost(displays, new Set([1]), 2, 1), 2); // game still running: stay on the free screen
+  assert.equal(pickHost(displays, new Set(), 2, 1), 1); // game over: back to the main screen
   assert.equal(pickHost(displays, new Set([1, 2]), 1, 1), null);
-  assert.equal(pickHost([LEFT], new Set(), 2, 1), 1); // her monitor was unplugged
+  assert.equal(pickHost([LEFT, RIGHT], new Set([1]), 3, 1), 2); // her monitor was unplugged during a game
 });
 
 test("the window lister can send her window to the desktop layer without activating it", () => {

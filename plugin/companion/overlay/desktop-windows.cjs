@@ -80,11 +80,16 @@ function busyDisplays(windows, displays, { ownPid } = {}) {
   return busy;
 }
 
-/** Which display she should live on: stay where she is unless a fullscreen app took it; null when every screen is busy. */
+/**
+ * Which display she should live on: the main screen whenever it is free (so she comes home after a game),
+ * otherwise the screen she is on if it is free, otherwise any free one; null when every screen is busy.
+ */
 function pickHost(displays, busy, currentId, primaryId) {
-  if (displays.some((d) => d.id === currentId) && !busy.has(currentId)) return currentId;
-  const free = displays.filter((d) => !busy.has(d.id)).sort((a, b) => (b.id === primaryId) - (a.id === primaryId));
-  return free.length ? free[0].id : null;
+  const free = (id) => displays.some((d) => d.id === id) && !busy.has(id);
+  if (free(primaryId)) return primaryId;
+  if (free(currentId)) return currentId;
+  const other = displays.find((d) => !busy.has(d.id));
+  return other ? other.id : null;
 }
 
 /** Kept for the single-screen case: true when the given display is covered by a fullscreen app. */
