@@ -2,7 +2,7 @@
 
 **Real-time visualization of Claude Code agents — watch your AI work like a living office.**
 
-[![Live Demo](https://img.shields.io/badge/demo-live-ec4899?style=for-the-badge&logo=vercel)](https://YOUR_USERNAME.github.io/agent-office)
+[![Live Demo](https://img.shields.io/badge/demo-live-ec4899?style=for-the-badge&logo=vercel)](https://howardguoui.github.io/agent-office/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-818cf8?style=for-the-badge)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-f59e0b?style=for-the-badge)](https://code.claude.com)
 
@@ -12,7 +12,7 @@ Every time Claude Code spawns a subagent, calls a tool, or passes work between a
 
 ## 🎬 Live Demo
 
-**[→ Try the live demo](https://YOUR_USERNAME.github.io/agent-office)**
+**[→ Try the live demo](https://howardguoui.github.io/agent-office/)**
 
 The demo runs a simulation. Install the plugin to see your actual Claude Code sessions.
 
@@ -49,7 +49,7 @@ Claude Code runs a task
 ### 1. Clone this repo
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/agent-office.git
+git clone https://github.com/howardguoui/agent-office.git
 cd agent-office
 ```
 
@@ -114,6 +114,30 @@ Agents appear immediately as Claude Code spawns them. Watch them work.
 
 ---
 
+## Plugin: desktop companion (`plugin/`)
+
+`plugin/` is a second, newer way to run Agent Office. Instead of the office page it has a local broker and a Live2D
+character on your desktop who reacts to your agents. Details are in [`plugin/README.md`](plugin/README.md).
+
+- **Broker** (`plugin/broker/`): HTTP + WebSocket on `127.0.0.1:4242` (loopback only). It takes the same
+  `POST /event` hook events, normalizes Claude Code, Codex and Gemini CLI events into one shape, tracks
+  simultaneous sessions separately, and logs names-only metadata (never prompts, arguments or outputs).
+- **Desktop companion** (`plugin/companion/`): an Electron window with a Live2D character. She chats through a
+  local Ollama model, can pass what you type to Claude Code or Codex, and shows Allow / Deny approvals in her
+  speech bubble. `COMPANION=off` runs the broker without her.
+- **MCP server** (`plugin/mcp-server/`): two tools over stdio, `agent_office_status` and `agent_office_open`.
+
+```bash
+cd plugin
+npm ci
+npm start        # broker on 127.0.0.1:4242; opens the companion
+npm test         # node --test, no Electron or display needed
+```
+
+The broker and `server/` both default to port 4242, so run one or the other.
+
+---
+
 ## File Structure
 
 ```
@@ -127,11 +151,13 @@ agent-office/
 │   ├── package.json
 │   └── ui/
 │       └── index.html         # Live-connected visualization UI
+├── plugin/                    # Broker, desktop companion, MCP server (see plugin/README.md)
 ├── demo/
 │   └── index.html             # Standalone demo (GitHub Pages)
 ├── .github/
 │   └── workflows/
-│       └── deploy-demo.yml    # Auto-deploys demo to GitHub Pages
+│       ├── deploy-demo.yml    # Auto-deploys demo to GitHub Pages
+│       └── plugin-tests.yml   # Runs the plugin's tests on push and pull request
 ├── install.sh                 # One-command installer
 └── README.md
 ```
@@ -164,8 +190,8 @@ AGENT_OFFICE_URL=http://localhost:9999/event claude "do something"
 - [ ] Agent-to-agent message trace lines
 - [ ] Session replay / export
 - [ ] Token usage per agent
-- [ ] Electron standalone app
-- [ ] Multi-session support
+- [x] Electron standalone app (the desktop companion in `plugin/`)
+- [x] Multi-session support (the `plugin/` broker tracks simultaneous Claude Code and Codex sessions)
 
 ---
 
